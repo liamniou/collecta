@@ -3,7 +3,7 @@ Flask==3.0.3
 flask-cors==4.0.1
 waitress==3.0.0
 SQLAlchemy==2.0.35
-requests==2.32.3
+requests==2.34.2
 yt-dlp==2024.8.6
 trafilatura==1.12.2
 beautifulsoup4==4.12.3
