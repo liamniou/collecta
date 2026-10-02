@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Collecta</title>
+  <style>
+    :root { --bg:#0a0a0b; --panel:#111113; --card:#161619; --border:#26262b; --accent:#6366f1; --accent-hover:#818cf8; --text:#f4f4f5; --muted:#8b8b94; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:36px 20px 24px; text-align:center; }
+    header h1 { margin:0; font-size:28px; letter-spacing:.5px; font-weight:700; }
+    header h1 span { color:var(--accent); }
+    header p { color:var(--muted); margin:8px 0 0; font-size:14px; }
+    main { max-width:640px; margin:0 auto; padding:0 20px 60px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:24px; margin-top:20px; }
+    label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
+    input[type=text] { width:100%; padding:12px 14px; border-radius:8px; border:1px solid var(--border);
+      background:var(--panel); color:var(--text); font-size:15px; margin-bottom:16px; }
+    input[type=text]:focus { outline:none; border-color:#3a3a42; }
+    button { background:var(--accent); color:#fff; border:1px solid var(--accent); border-radius:8px; height:40px; padding:0 20px;
+      font-size:14px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; }
+    button:hover { background:var(--accent-hover); border-color:var(--accent-hover); }
+    button.secondary { background:transparent; border:1px solid var(--border); color:var(--text); }
+    button.secondary:hover { background:rgba(255,255,255,.05); }
+    .muted { color:var(--muted); font-size:13px; }
+    .types { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
+    .type-pill { border:1px solid var(--border); background:var(--panel); color:var(--muted);
+      border-radius:8px; height:40px; padding:0 14px; font-size:13px; font-weight:400; cursor:pointer; user-select:none;
+      display:inline-flex; align-items:center; }
+    .type-pill:hover { border-color:#3a3a42; color:var(--text); }
+    .type-pill.active { border-color:var(--accent); background:rgba(99,102,241,.14); color:var(--text); }
+    .type-pill .sug { color:var(--accent); font-size:11px; margin-left:6px; }
+    #typeChooser { display:contents; }
+    code { background:var(--panel); padding:2px 8px; border-radius:6px; font-size:16px; letter-spacing:2px; }
+    a { color:#7aa2ff; }
+    .recent { margin-top:28px; }
+    .recent h2 { font-size:12px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.7px; margin:0 0 10px 4px; }
+    .recent-item { display:flex; align-items:center; justify-content:space-between; gap:12px;
+      background:var(--card); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-top:8px; }
+    .recent-item:hover { border-color:#3a3a42; }
+    .recent-link { display:flex; flex:1; min-width:0; gap:12px; align-items:center; justify-content:space-between;
+      text-decoration:none; color:var(--text); }
+    .recent-item .name { font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .recent-item .sub { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .recent-item .meta { font-size:12px; color:var(--muted); flex-shrink:0; text-align:right; }
+    .recent-item .del { background:transparent; color:#e07a7d; border:1px solid var(--border); border-radius:8px; padding:8px 11px;
+      font-size:13px; cursor:pointer; flex-shrink:0; }
+    .recent-item .del:hover { background:rgba(229,72,77,.12); border-color:#e5484d; }
+    .recent-item .run { background:transparent; color:var(--muted); border:1px solid var(--border); border-radius:8px; padding:8px 11px;
+      font-size:13px; cursor:pointer; flex-shrink:0; }
+    .recent-item .run:hover:not(:disabled) { background:rgba(99,102,241,.14); border-color:var(--accent); color:var(--text); }
+    .recent-item .run:disabled { opacity:.5; cursor:default; }
+    .go-row { display:flex; gap:10px; align-items:center; }
+    dialog { background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:12px; width:min(560px,92vw); padding:20px; }
+    dialog::backdrop { background:rgba(0,0,0,.6); }
+    dialog h3 { margin:0 0 12px; font-size:16px; }
+    dialog textarea { width:100%; min-height:220px; resize:vertical; padding:12px 14px; border-radius:8px;
+      border:1px solid var(--border); background:var(--panel); color:var(--text); font-size:14px; font-family:inherit; }
+    dialog textarea:focus { outline:none; border-color:#3a3a42; }
+    dialog .dlg-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Collect<span>a</span></h1>
+    <p>Paste a post, reel, or article link &mdash; get an approved movie list into TMDB, Radarr &amp; Kometa.</p>
+  </header>
+  <main>
+    <div class="card">
+      <label for="url">Link (Instagram / TikTok / Telegram / website)</label>
+      <input type="text" id="url" placeholder="https://www.instagram.com/reel/..." autofocus>
+      <label>Content type</label>
+      <div class="types">
+        <div id="typeChooser"></div>
+        <button class="type-pill" id="openPaste" type="button">Paste text…</button>
+      </div>
+      <div class="go-row">
+        <button id="go">Analyze</button>
+        <span class="muted" id="msg"></span>
+      </div>
+    </div>
+
+    <div class="recent" id="recent" style="display:none">
+      <h2>Recent</h2>
+      <div id="recentList"></div>
+    </div>
+  </main>
+
+  <dialog id="pasteDlg">
+    <h3>Paste text</h3>
+    <label for="pasteText">Paste a caption, post body, or list of movies</label>
+    <textarea id="pasteText" placeholder="Paste plain text here…" autofocus></textarea>
+    <div class="dlg-actions">
+      <button class="secondary" id="cancelPaste" type="button">Cancel</button>
+      <button id="submitPaste" type="button">Analyze</button>
+    </div>
+  </dialog>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let selectedType = 'auto';
+    let userPickedType = false;
+
+    async function loadTypes(url) {
+      const q = url ? ('?url=' + encodeURIComponent(url)) : '';
+      const d = await (await fetch('/api/content-types' + q)).json();
+      const suggested = d.suggested || 'auto';
+      if (!userPickedType) selectedType = suggested;
+      $('typeChooser').innerHTML = d.types.map(t => {
+        const active = t.id === selectedType ? ' active' : '';
+        const sug = (t.id === suggested && suggested !== 'auto') ? '<span class="sug">detected</span>' : '';
+        return '<div class="type-pill' + active + '" data-id="' + t.id + '" title="' + esc(t.description) + '">' +
+          esc(t.label) + sug + '</div>';
+      }).join('');
+      $('typeChooser').querySelectorAll('.type-pill').forEach(p => p.onclick = () => {
+        userPickedType = true; selectedType = p.dataset.id;
+        $('typeChooser').querySelectorAll('.type-pill').forEach(x => x.classList.toggle('active', x === p));
+      });
+    }
+
+    let detectTimer;
+    $('url').addEventListener('input', () => {
+      clearTimeout(detectTimer);
+      detectTimer = setTimeout(() => loadTypes($('url').value.trim()), 350);
+    });
+
+    $('go').onclick = async () => {
+      const url = $('url').value.trim();
+      if (!url) { $('msg').textContent = 'Enter a link first.'; return; }
+      $('go').disabled = true; $('msg').textContent = 'Creating job…';
+      try {
+        const r = await fetch('/api/jobs', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ url, content_type: selectedType })
+        });
+        const data = await r.json();
+        if (data.id) { location.href = '/job/' + data.id; }
+        else { $('msg').textContent = data.error || 'Failed.'; $('go').disabled = false; }
+      } catch (e) { $('msg').textContent = 'Request failed.'; $('go').disabled = false; }
+    };
+
+    const pasteDlg = $('pasteDlg');
+    $('openPaste').onclick = () => { $('pasteText').value = ''; pasteDlg.showModal(); };
+    $('cancelPaste').onclick = () => pasteDlg.close();
+
+    $('submitPaste').onclick = async () => {
+      const text = $('pasteText').value.trim();
+      if (!text) return;
+      $('submitPaste').disabled = true;
+      try {
+        const r = await fetch('/api/jobs', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ text })
+        });
+        const data = await r.json();
+        if (data.id) { location.href = '/job/' + data.id; }
+        else { alert(data.error || 'Failed.'); }
+      } catch (e) { alert('Request failed.'); }
+      $('submitPaste').disabled = false;
+    };
+
+    const STATUS_LABEL = { queued:'queued', ingesting:'analyzing', extracting:'analyzing',
+      matching:'analyzing', awaiting_approval:'ready', done:'done', error:'error' };
+
+    async function loadRecent() {
+      try {
+        const { jobs } = await (await fetch('/api/jobs/recent')).json();
+        if (!jobs || !jobs.length) { $('recentList').innerHTML = ''; $('recent').style.display = 'none'; return; }
+        $('recentList').innerHTML = jobs.map(j => {
+          const name = (j.list_name && j.list_name.trim()) || j.source_url;
+          const sub = j.content_type === 'pasted_text' ? 'Pasted text' : j.source_url;
+          const st = STATUS_LABEL[j.status] || j.status;
+          return '<div class="recent-item">' +
+            '<a class="recent-link" href="/job/' + j.id + '">' +
+            '<div style="min-width:0"><div class="name">' + esc(name) + '</div>' +
+            '<div class="sub">' + esc(sub) + '</div></div>' +
+            '<div class="meta">' + st + '<br>' + j.count + ' movies</div></a>' +
+            '<button class="run" data-id="' + j.id + '" title="Run Kometa for this collection">☄️</button>' +
+            '<button class="del" data-id="' + j.id + '" title="Remove job">\u2715</button></div>';
+        }).join('');
+        document.querySelectorAll('.recent-item .del').forEach(b => b.onclick = () => removeJob(b.dataset.id));
+        document.querySelectorAll('.recent-item .run').forEach(b => b.onclick = () => runKometa(b));
+        $('recent').style.display = 'block';
+      } catch (e) { /* ignore */ }
+    }
+
+    async function removeJob(id) {
+      await fetch('/api/jobs/' + id, { method:'DELETE' });
+      loadRecent();
+    }
+
+    async function runKometa(btn) {
+      const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = '\u2026';
+      try {
+        const r = await fetch('/api/jobs/' + btn.dataset.id + '/kometa-run', { method:'POST' });
+        btn.textContent = r.ok ? '\u2713 triggered' : 'failed';
+      } catch (e) { btn.textContent = 'failed'; }
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2500);
+    }
+
+    function esc(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+    loadTypes();
+    loadRecent();
+  </script>
+</body>
+</html>

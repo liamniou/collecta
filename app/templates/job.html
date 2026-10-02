@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Collecta &middot; job {{ job_id }}</title>
+  <style>
+    :root { --bg:#0a0a0b; --panel:#111113; --card:#161619; --border:#26262b; --accent:#6366f1; --accent-hover:#818cf8; --text:#f4f4f5; --muted:#8b8b94; --ok:#818cf8; --danger:#e5484d; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); }
+    a { color:#7aa2ff; text-decoration:none; }
+    header { padding:20px; display:flex; align-items:center; justify-content:space-between; }
+    header h1 { font-size:20px; margin:0; font-weight:700; }
+    header h1 a { color:var(--text); text-decoration:none; }
+    header h1 span { color:var(--accent); }
+    main { max-width:1080px; margin:0 auto; padding:0 20px 80px; }
+    .status { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 20px; margin-bottom:20px; }
+    .status .counter { float:right; font-weight:600; color:var(--ok); }
+    .spinner { display:inline-block; width:14px; height:14px; border:2px solid #444; border-top-color:var(--accent);
+      border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:8px; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:18px; }
+    .movie { background:var(--card); border-radius:10px; overflow:hidden; position:relative; border:1px solid var(--border); display:flex; flex-direction:column; }
+    .movie.rejected { opacity:.4; }
+    .movie.unmatched { border-color:#5a4a2a; border-style:dashed; }
+    .movie .nomatch { position:absolute; top:8px; left:8px; background:rgba(0,0,0,.7);
+      color:#e0b050; font-size:11px; padding:2px 7px; border-radius:5px; }
+    .movie .rstatus { display:inline-block; margin-top:6px; font-size:11px; padding:2px 8px; border-radius:5px; }
+    .movie .rlink { text-decoration:none; }
+    .movie .rlink:hover .rstatus { filter:brightness(1.2); }
+    .movie img { width:100%; aspect-ratio:2/3; object-fit:cover; display:block; background:#11141a; }
+    .movie .body { padding:8px 10px; display:flex; flex-direction:column; flex:1; }
+    .movie .t { font-size:13px; font-weight:600; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2;
+      -webkit-box-orient:vertical; overflow:hidden; }
+    .movie .y { font-size:12px; color:var(--muted); }
+    .movie .actions { display:flex; gap:6px; margin-top:auto; padding-top:8px; }
+    .movie .actions button { flex:1; font-size:12px; padding:5px 0; border:0; border-radius:6px; cursor:pointer; }
+    .btn-approve { background:rgba(99,102,241,.16); color:#a5b4fc; }
+    .btn-reject { background:#3a1c1c; color:#e69090; }
+    .btn-swap { background:#2a2f3a; color:#cbd3df; }
+
+    /* consistent inputs + buttons */
+    input[type=text] { padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text); font-size:14px; }
+    input[type=text]:focus { outline:none; border-color:#3a3a42; }
+    button.action { background:var(--accent); color:#fff; border:1px solid var(--accent); border-radius:8px; padding:0 16px; height:38px;
+      font-size:13.5px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+    button.action:hover:not(:disabled) { background:var(--accent-hover); border-color:var(--accent-hover); }
+    button.action.secondary { background:transparent; color:var(--text); border:1px solid var(--border); }
+    button.action.secondary:hover:not(:disabled) { background:rgba(255,255,255,.05); }
+    button:disabled { opacity:.5; cursor:default; }
+
+    /* sections + headings */
+    .section { margin-top:30px; }
+    .heading { font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.7px; margin:0 0 12px; }
+    .btn-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .summary { margin-top:12px; font-size:13px; color:var(--muted); }
+
+    .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+    .toolbar .heading { margin:0; }
+    .toolbar input { margin-left:auto; }
+    .approved-counter { color:var(--ok); font-weight:600; font-size:13px; }
+
+    .listname-row { display:flex; flex-direction:column; gap:6px; margin-bottom:20px; }
+    .listname-row label { font-size:12px; color:var(--muted); }
+    .listname-input { width:100%; font-size:15px; }
+
+    .section-title { font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.7px;
+      margin:0 0 14px; display:flex; align-items:center; gap:10px; }
+    .section-title .count { color:var(--muted); font-weight:600; }
+    .section-title .action { margin-left:auto; height:32px; padding:0 12px; font-size:12px; }
+    #searchingSection { padding-bottom:24px; border-bottom:1px solid #2a2f3a; margin-bottom:30px; }
+
+    /* connection status line */
+    .pp-status { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; margin-top:12px; }
+    .pp-status.link { cursor:pointer; }
+    .pp-status.link:hover { color:var(--text); }
+    .pp-status .dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+    .pp-status .dot.green { background:var(--accent); }
+    .pp-status .dot.red { background:var(--danger); }
+    .pp-connect { font-size:12px; color:var(--muted); margin-top:6px; }
+    .pp-connect code { background:#11141a; padding:1px 6px; border-radius:5px; letter-spacing:1px; }
+
+    /* activity log */
+    .log div { padding:8px 12px; background:var(--card); border:1px solid var(--border); border-left:3px solid var(--border); border-radius:8px; margin-top:8px; font-size:12px; color:var(--muted); }
+    .log .ok { border-left-color:var(--ok); }
+    .log .error { border-left-color:var(--accent); }
+    dialog { background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:12px; width:min(560px,92vw); padding:20px; }
+    dialog .results { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; margin-top:12px; }
+    dialog .results .movie { cursor:pointer; }
+    .dlg-search { display:flex; gap:8px; margin-top:12px; }
+    .dlg-search input { flex:1; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><a href="/">Collect<span>a</span></a></h1>
+    <div style="display:flex; gap:10px;">
+      <button class="action secondary" id="rescanJob">Rescan</button>
+      <button class="action secondary" id="removeJob">Remove job</button>
+    </div>
+  </header>
+  <main>
+    <div class="status" id="status"><span class="spinner"></span><span id="stage">Loading…</span></div>
+
+    <div class="listname-row" id="listnameRow" style="display:none">
+      <label for="listname">List name</label>
+      <input type="text" id="listname" class="listname-input" placeholder="List name" title="Suggested from the post — edit to rename">
+    </div>
+
+    <div id="review" style="display:none">
+      <div id="searchingSection" class="section" style="display:none">
+        <h2 class="section-title">In search <span id="searchingCount" class="count"></span>
+          <button class="action secondary" id="rescueSearching">Import stuck</button>
+        </h2>
+        <div class="grid" id="searchingGrid"></div>
+      </div>
+
+      <div class="toolbar">
+        <h2 class="heading">Approve matches</h2>
+        <span class="approved-counter" id="approvedCounter"></span>
+        <input type="text" id="search" placeholder="Add a movie by title…">
+        <button class="action secondary" id="searchBtn">Search</button>
+      </div>
+      <div class="grid" id="grid"></div>
+
+      <div class="section">
+        <h2 class="heading">Publish</h2>
+        <div class="btn-row">
+          <button class="action" id="pubTmdb">Create TMDB list</button>
+          <button class="action" id="pubRadarr">Add list to Radarr</button>
+          <button class="action" id="pubKometa">Create Kometa collection</button>
+          <button class="action secondary" id="checkRadarr">Check Radarr status</button>
+          <button class="action secondary" id="importRadarr">Import downloads</button>
+        </div>
+        <div class="pp-status" id="tmdbStatus"></div>
+        <div class="pp-connect" id="tmdbConnect"></div>
+        <div class="summary" id="radarrSummary"></div>
+      </div>
+
+      <div class="section" id="activitySection" style="display:none">
+        <h2 class="heading">Activity</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </main>
+
+  <dialog id="dlg">
+    <form method="dialog"><button class="action secondary" style="float:right">Close</button></form>
+    <h3 id="dlgTitle">Search</h3>
+    <div class="dlg-search">
+      <input type="text" id="dlgQuery" placeholder="Search TMDB by title…">
+      <button class="action secondary" id="dlgSearchBtn">Search</button>
+    </div>
+    <div class="results" id="dlgResults"></div>
+  </dialog>
+
+  <script>
+    const JOB_ID = "{{ job_id }}";
+    const RADARR_WEB = "{{ radarr_web_url }}";
+    const $ = (id) => document.getElementById(id);
+    let JOB = null;
+    let swapTarget = null; // match id being swapped, or 'add'
+    let RADARR_STATUS = {}; // tmdb_id -> radarr state
+
+    const placeholder = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="150" height="225"><rect width="100%" height="100%" fill="#11141a"/><text x="50%" y="50%" fill="#555" font-size="12" text-anchor="middle">no poster</text></svg>');
+
+    async function poll() {
+      const r = await fetch('/api/jobs/' + JOB_ID);
+      JOB = await r.json();
+      if (document.activeElement !== $('listname')) $('listname').value = JOB.list_name || '';
+      renderStatus();
+      if (JOB.status === 'awaiting_approval' || JOB.status === 'done') {
+        $('listnameRow').style.display = 'flex';
+        $('review').style.display = 'block';
+        renderGrid();
+        renderLog();
+        updatePublishButtons();
+        if (JOB.radarr_status && Object.keys(JOB.radarr_status).length)
+          applyRadarrStatus(JOB.radarr_status, JOB.radarr_checked_at);
+      }
+      if (JOB.status !== 'awaiting_approval' && JOB.status !== 'done' && JOB.status !== 'error') {
+        setTimeout(poll, 2000);
+      }
+    }
+
+    function renderStatus() {
+      const map = { queued:'Queued', ingesting:'Downloading & transcribing',
+        extracting:'Finding movie titles', matching:'Matching posters on TMDB',
+        awaiting_approval:'Ready for review', done:'Done', error:'Error' };
+      const total = JOB.matches.length;
+      const approved = JOB.matches.filter(m => m.state === 'approved').length;
+      const inReview = JOB.status === 'awaiting_approval' || JOB.status === 'done';
+
+      if (inReview) {
+        // No status bar during review — just the counter next to "Approve matches".
+        $('status').style.display = total ? 'none' : 'block';
+        if (!total) $('status').innerHTML = '<span class="muted">No movies were found in this post. Try adding some manually below.</span>';
+        $('approvedCounter').textContent = total ? (approved + '/' + total + ' approved') : '';
+        return;
+      }
+
+      $('status').style.display = 'block';
+      $('approvedCounter').textContent = '';
+      $('status').innerHTML = (JOB.status === 'error' ? '' : '<span class="spinner"></span>') +
+        '<span>' + (map[JOB.status] || JOB.status) + '</span>' +
+        (JOB.status === 'error' ? '<pre style="color:#e69090;white-space:pre-wrap">'+ (JOB.error||'') +'</pre>' : '');
+    }
+
+    function card(m) {
+      const el = document.createElement('div');
+      const unmatched = !m.tmdb_id;
+      el.className = 'movie ' + m.state + (unmatched ? ' unmatched' : '');
+      const actions = unmatched
+        ? '<button class="btn-swap">Find</button><button class="btn-reject">✕</button>'
+        : '<button class="btn-approve">✓</button><button class="btn-reject">✕</button>' +
+          (m.alternates && m.alternates.length ? '<button class="btn-swap">⇄</button>' : '');
+      el.innerHTML =
+        '<img src="'+(m.poster_url||placeholder)+'" onerror="this.src=\''+placeholder+'\'">' +
+        (unmatched ? '<div class="nomatch">No TMDB match</div>' : '') +
+        '<div class="body"><div class="t">'+ m.title +'</div><div class="y">'+ (m.year||'') +'</div>' +
+        (RADARR_STATUS[m.tmdb_id] ? radarrBadge(RADARR_STATUS[m.tmdb_id], m.tmdb_id) : '') +
+        '<div class="actions">' + actions + '</div></div>';
+      const approve = el.querySelector('.btn-approve');
+      if (approve) approve.onclick = () => update([{ id:m.id, state:'approved' }]);
+      el.querySelector('.btn-reject').onclick = () => update([{ id:m.id, state:'rejected' }]);
+      const swap = el.querySelector('.btn-swap');
+      if (swap) swap.onclick = () => openSwap(m);
+      return el;
+    }
+
+    function renderGrid() {
+      const g = $('grid'); g.innerHTML = '';
+      JOB.matches.forEach(m => g.appendChild(card(m)));
+    }
+
+    function renderLog() {
+      const log = $('log'); log.innerHTML = '';
+      const items = JOB.publishes || [];
+      if (!items.length) { $('activitySection').style.display = 'none'; return; }
+      $('activitySection').style.display = 'block';
+      items.slice().reverse().forEach(p => {
+        const d = document.createElement('div');
+        d.className = p.status;
+        d.textContent = '[' + p.target + '] ' + p.detail;
+        log.appendChild(d);
+      });
+    }
+
+    async function update(updates, added) {
+      const r = await fetch('/api/jobs/' + JOB_ID + '/matches', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ updates: updates||[], added: added||[] })
+      });
+      JOB = await r.json();
+      renderGrid();
+      renderStatus();
+    }
+
+    async function openSwap(m) {
+      swapTarget = m.id;
+      const box = $('dlgResults'); box.innerHTML = '';
+      if (m.alternates && m.alternates.length) {
+        $('dlgTitle').textContent = 'Pick the correct match';
+        $('dlgQuery').value = m.title;
+        m.alternates.forEach(a => box.appendChild(resultCard(a)));
+      } else {
+        $('dlgTitle').textContent = 'Find a match';
+        $('dlgQuery').value = m.title;
+        await runDialogSearch(m.title);
+      }
+      $('dlg').showModal();
+    }
+
+    async function runDialogSearch(q) {
+      q = (q || '').trim(); if (!q) return;
+      const box = $('dlgResults');
+      box.innerHTML = '<span class="muted">Searching…</span>';
+      const data = await (await fetch('/api/tmdb/search?q=' + encodeURIComponent(q))).json();
+      const res = data.results || [];
+      box.innerHTML = res.length ? '' : '<span class="muted">No results.</span>';
+      res.forEach(a => box.appendChild(resultCard(a)));
+    }
+
+    function resultCard(a) {
+      const el = document.createElement('div');
+      el.className = 'movie';
+      el.innerHTML = '<img src="'+(a.poster_url||placeholder)+'" onerror="this.src=\''+placeholder+'\'">' +
+        '<div class="body"><div class="t">'+a.title+'</div><div class="y">'+(a.year||'')+'</div></div>';
+      el.onclick = () => choose(a);
+      return el;
+    }
+
+    async function choose(a) {
+      $('dlg').close();
+      if (swapTarget === 'add') {
+        await update([], [{ tmdb_id:a.tmdb_id, title:a.title, year:a.year, poster_path:a.poster_path, overview:a.overview }]);
+      } else {
+        await update([{ id:swapTarget, tmdb_id:a.tmdb_id, title:a.title, year:a.year,
+          poster_path:a.poster_path, overview:a.overview, state:'approved' }]);
+      }
+    }
+
+    $('searchBtn').onclick = async () => {
+      const q = $('search').value.trim(); if (!q) return;
+      swapTarget = 'add';
+      $('dlgTitle').textContent = 'Add a movie';
+      $('dlgQuery').value = q;
+      $('dlg').showModal();
+      await runDialogSearch(q);
+    };
+
+    $('dlgSearchBtn').onclick = () => runDialogSearch($('dlgQuery').value);
+    $('dlgQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runDialogSearch($('dlgQuery').value); } });
+
+    async function publish(target, btn) {
+      const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Working…';
+      try {
+        const r = await fetch('/api/jobs/' + JOB_ID + '/' + target, { method:'POST' });
+        const d = await r.json();
+        try { JOB = await (await fetch('/api/jobs/' + JOB_ID)).json(); } catch (e) {}
+        JOB.publishes = JOB.publishes || [];
+        if (!JOB.publishes.length) JOB.publishes.push({ target, status: d.status || (r.ok?'ok':'error'), detail: d.detail || d.error || '' });
+        renderLog();
+      } catch (e) {
+        (JOB.publishes = JOB.publishes || []).push({ target, status:'error', detail:'request failed' });
+        renderLog();
+      }
+      btn.textContent = orig;
+      updatePublishButtons();
+    }
+
+    function updatePublishButtons() {
+      const pubs = (JOB && JOB.publishes) || [];
+      const tmdbDone = !!(JOB && JOB.tmdb_list_id);
+      const radarrDone = pubs.some(p => p.target === 'radarr' && p.status === 'ok');
+      const t = $('pubTmdb'), r = $('pubRadarr');
+      if (t) { t.disabled = tmdbDone; t.textContent = tmdbDone ? 'TMDB list created ✓' : 'Create TMDB list'; }
+      // Radarr stays clickable so it can re-sync the list (add new + search) on demand.
+      if (r) { r.disabled = false; r.textContent = radarrDone ? 'Re-sync Radarr' : 'Add list to Radarr'; }
+    }
+
+    $('pubRadarr').onclick = (e) => publish('radarr', e.target);
+    $('pubKometa').onclick = (e) => publish('kometa', e.target);
+    $('pubTmdb').onclick = (e) => publish('tmdb', e.target);
+
+    const RADARR_LABELS = {
+      downloaded:    ['✓ In Radarr',     '#242645', '#a5b4fc'],
+      import_pending:['⤓ Ready to import','#33301c', '#e0d050'],
+      monitored:     ['◷ Searching',     '#3a3320', '#e0b050'],
+      unmonitored:   ['Unmonitored',     '#2a2f3a', '#9aa4b2'],
+      not_in_radarr: ['Not in Radarr',   '#3a1c1c', '#e69090'],
+    };
+
+    function radarrBadge(status, tmdbId) {
+      const [label, bg, fg] = RADARR_LABELS[status] || [status, '#2a2f3a', '#9aa4b2'];
+      const pill = '<span class="rstatus" style="background:'+bg+';color:'+fg+'">'+label+'</span>';
+      return (RADARR_WEB && tmdbId)
+        ? '<a class="rlink" href="'+RADARR_WEB+'/movie/'+tmdbId+'" target="_blank">'+pill+'</a>'
+        : pill;
+    }
+
+    function statusCard(m) {
+      const el = document.createElement('div');
+      el.className = 'movie';
+      el.innerHTML =
+        '<img src="'+(m.poster_url||placeholder)+'" onerror="this.src=\''+placeholder+'\'">' +
+        '<div class="body"><div class="t">'+ m.title +'</div><div class="y">'+ (m.year||'') +'</div>' +
+        (RADARR_STATUS[m.tmdb_id] ? radarrBadge(RADARR_STATUS[m.tmdb_id], m.tmdb_id) : '') + '</div>';
+      return el;
+    }
+
+    function renderSearching() {
+      const searching = JOB.matches.filter(m => RADARR_STATUS[m.tmdb_id] === 'monitored');
+      const g = $('searchingGrid'); g.innerHTML = '';
+      if (!searching.length) { $('searchingSection').style.display = 'none'; return; }
+      searching.forEach(m => g.appendChild(statusCard(m)));
+      $('searchingCount').textContent = '(' + searching.length + ')';
+      $('searchingSection').style.display = 'block';
+    }
+
+    function applyRadarrStatus(statuses, checkedAt) {
+      RADARR_STATUS = {};
+      Object.entries(statuses).forEach(([k, v]) => RADARR_STATUS[+k] = v);
+      const counts = {};
+      Object.values(statuses).forEach(v => counts[v] = (counts[v] || 0) + 1);
+      const when = checkedAt ? ' · checked ' + new Date(checkedAt + (checkedAt.endsWith('Z') ? '' : 'Z')).toLocaleString() : '';
+      $('radarrSummary').textContent =
+        (counts.downloaded||0) + ' downloaded · ' + (counts.import_pending||0) + ' ready to import · ' +
+        (counts.monitored||0) + ' searching · ' + (counts.unmonitored||0) + ' unmonitored · ' +
+        (counts.not_in_radarr||0) + ' not in Radarr' + when;
+      renderSearching();
+      renderGrid();
+    }
+
+    $('checkRadarr').onclick = async () => {
+      $('radarrSummary').textContent = 'Checking…';
+      try {
+        const d = await (await fetch('/api/jobs/' + JOB_ID + '/radarr-status')).json();
+        if (d.error) { $('radarrSummary').textContent = d.error; return; }
+        applyRadarrStatus(d.statuses, d.checked_at);
+      } catch (e) { $('radarrSummary').textContent = 'Failed to reach Radarr.'; }
+    };
+
+    $('importRadarr').onclick = async (e) => {
+      e.target.disabled = true; const orig = e.target.textContent; e.target.textContent = 'Importing…';
+      try {
+        const d = await (await fetch('/api/jobs/' + JOB_ID + '/radarr-import', { method:'POST' })).json();
+        $('radarrSummary').textContent = d.detail || d.error || '';
+        $('checkRadarr').click();
+      } finally { e.target.disabled = false; e.target.textContent = orig; }
+    };
+
+    $('rescueSearching').onclick = async (e) => {
+      e.target.disabled = true; const orig = e.target.textContent; e.target.textContent = 'Importing…';
+      try {
+        const d = await (await fetch('/api/jobs/' + JOB_ID + '/radarr-rescue', { method:'POST' })).json();
+        $('radarrSummary').textContent = d.detail || d.error || '';
+        setTimeout(() => $('checkRadarr').click(), 2000);
+      } finally { e.target.disabled = false; e.target.textContent = orig; }
+    };
+
+    async function refreshTMDB() {
+      const s = await (await fetch('/api/tmdb/status')).json();
+      const el = $('tmdbStatus'); $('tmdbConnect').innerHTML = '';
+      if (s.authed) {
+        el.className = 'pp-status';
+        el.innerHTML = '<span class="dot green"></span> TMDB connected';
+        el.onclick = null;
+      } else if (!s.configured) {
+        el.className = 'pp-status';
+        el.innerHTML = '<span class="dot red"></span> TMDB not configured';
+        el.onclick = null;
+      } else {
+        el.className = 'pp-status link';
+        el.innerHTML = '<span class="dot red"></span> Connect TMDB';
+        el.onclick = connectTMDB;
+      }
+    }
+
+    async function connectTMDB() {
+      const d = await (await fetch('/api/tmdb/auth', { method:'POST' })).json();
+      if (d.error) { $('tmdbConnect').textContent = d.error; return; }
+      window.open(d.approve_url, '_blank');
+      $('tmdbConnect').innerHTML = 'Approve in the opened tab, then <button class="action secondary" id="tmdbDone">I approved</button>';
+      $('tmdbDone').onclick = async () => {
+        const r = await (await fetch('/api/tmdb/auth/finish', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ request_token: d.request_token })
+        })).json();
+        if (r.authed) refreshTMDB();
+        else $('tmdbConnect').textContent = 'Not approved yet — approve in TMDB then click again.';
+      };
+    }
+
+    $('listname').onchange = async () => {
+      const name = $('listname').value.trim();
+      if (!name) return;
+      await fetch('/api/jobs/' + JOB_ID + '/name', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ list_name: name })
+      });
+      if (JOB) JOB.list_name = name;
+    };
+
+    $('removeJob').onclick = async () => {
+      if (!confirm('Remove this job? You can re-analyze the link afterwards.')) return;
+      await fetch('/api/jobs/' + JOB_ID, { method:'DELETE' });
+      location.href = '/';
+    };
+
+    $('rescanJob').onclick = async () => {
+      if (!JOB || !JOB.source_url) return;
+      $('rescanJob').disabled = true; $('rescanJob').textContent = 'Rescanning…';
+      const r = await fetch('/api/jobs', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ url: JOB.source_url, content_type: JOB.content_type || 'auto', force: true })
+      });
+      const d = await r.json();
+      if (d.id) location.href = '/job/' + d.id;
+      else { $('rescanJob').disabled = false; $('rescanJob').textContent = 'Rescan'; }
+    };
+
+    refreshTMDB();
+    poll();
+  </script>
+</body>
+</html>

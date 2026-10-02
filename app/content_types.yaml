@@ -1,0 +1,45 @@
+# Collecta content-type knowledge base.
+# Each type maps to a parsing `strategy` and optional `match` hints for auto-detection.
+# Extend by adding entries here (no code change needed for new detection rules).
+#
+# strategy values understood by app/ingest.py:
+#   video  -> download media with yt-dlp, transcribe audio (whisper), read thumbnails
+#   images -> download post images (+caption), read posters/on-screen text via vision
+#   text   -> extract written text only (Reddit JSON/render, article scrape)
+#
+# match:
+#   domains  -> substrings matched against the lowercased URL (host + path)
+#   keywords -> substrings matched anywhere in the lowercased URL
+
+types:
+  - id: social_video
+    label: Social video
+    description: Reels, TikTok, Shorts, YouTube — download, transcribe speech, read on-screen text.
+    strategy: video
+    match:
+      domains: [tiktok.com, vm.tiktok.com, youtube.com/shorts, youtu.be]
+      keywords: ["/reel/", "/reels/", "/shorts/", "/video/"]
+
+  - id: social_images
+    label: Social images
+    description: Instagram, Threads & Pinterest photo posts — read posters and text from images.
+    strategy: images
+    match:
+      domains: [instagram.com/p/, threads.net, threads.com, pinterest.com, pin.it]
+      keywords: []
+
+  - id: reddit
+    label: Reddit post
+    description: Reddit thread — parse ONLY the original post (title + body), ignoring all comments.
+    strategy: reddit_post
+    match:
+      domains: [reddit.com, redd.it]
+      keywords: ["/comments/"]
+
+  - id: text
+    label: Text / article
+    description: Telegram, blogs and articles — extract the written text.
+    strategy: text
+    match:
+      domains: [t.me, telegram.me, medium.com, substack.com]
+      keywords: []
