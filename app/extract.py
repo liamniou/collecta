@@ -6,6 +6,7 @@ import os
 from openai import OpenAI
 
 from . import config
+from .metrics import LLM_REQUESTS
 
 _client = OpenAI(base_url=config.LLM_BASE_URL, api_key=config.LLM_API_KEY or "dummy")
 
@@ -105,7 +106,9 @@ def _extract_list_chunk(text: str) -> list[dict]:
             response_format={"type": "json_object"},
         )
         raw = resp.choices[0].message.content or "{}"
+        LLM_REQUESTS.labels("extract_list", "ok").inc()
     except Exception as exc:  # noqa: BLE001
+        LLM_REQUESTS.labels("extract_list", "error").inc()
         print(f"[extract] list extraction failed: {exc}")
         raw = "{}"
     return _parse(raw)
@@ -139,7 +142,9 @@ def _extract_once(source_text: str, image_paths: list[str]) -> list[dict]:
             response_format={"type": "json_object"},
         )
         raw = resp.choices[0].message.content or "{}"
+        LLM_REQUESTS.labels("extract", "ok").inc()
     except Exception as exc:  # noqa: BLE001 - some proxies reject response_format/vision
+        LLM_REQUESTS.labels("extract", "error").inc()
         print(f"[extract] structured call failed ({exc}); retrying as plain text")
         raw = _fallback_text_only(source_text)
 
@@ -156,8 +161,10 @@ def _fallback_text_only(source_text: str) -> str:
             ],
             temperature=0.1,
         )
+        LLM_REQUESTS.labels("extract_fallback", "ok").inc()
         return resp.choices[0].message.content or "{}"
     except Exception as exc:  # noqa: BLE001
+        LLM_REQUESTS.labels("extract_fallback", "error").inc()
         print(f"[extract] fallback failed: {exc}")
         return "{}"
 
@@ -223,6 +230,7 @@ def suggest_list_name(source_text: str, titles: list[str] | None = None) -> str:
             temperature=0.3,
             max_tokens=200,
         )
+        LLM_REQUESTS.labels("list_name", "ok").inc()
         choices = resp.choices or []
         content = (choices[0].message.content or "") if choices else ""
         name = content.strip().strip('"')
@@ -230,6 +238,7 @@ def suggest_list_name(source_text: str, titles: list[str] | None = None) -> str:
         if len(name.split()) >= 2 and name.lower() not in ("top movies", "movie list"):
             return name[:80]
     except Exception as exc:  # noqa: BLE001
+        LLM_REQUESTS.labels("list_name", "error").inc()
         print(f"[extract] list-name suggestion failed: {exc}")
     return _fallback_name(headline or text)
 

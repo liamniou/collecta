@@ -7,10 +7,10 @@ import time
 import traceback
 from datetime import datetime, timedelta
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 from flask_cors import CORS
 
-from . import config, content_kb, extract, ingest, models, tmdb
+from . import config, content_kb, extract, ingest, metrics, models, tmdb
 from .models import (
     APPROVED, AWAITING_APPROVAL, DONE, EXTRACTING, INGESTING, MATCHING, REJECTED,
     REVIEW, Job, Match, Publish, Schedule, get_session,
@@ -27,6 +27,7 @@ _job_queue: "queue.Queue[tuple[str, str | int]]" = queue.Queue()
 # ---------------------------------------------------------------- worker
 
 def start_worker() -> None:
+    metrics.register_state_collector(_job_queue.qsize)
     _reset_interrupted_schedules()
     threading.Thread(target=_worker_loop, daemon=True).start()
     threading.Thread(target=_scheduler_loop, daemon=True).start()
@@ -43,7 +44,7 @@ def _worker_loop() -> None:
         except Exception:  # noqa: BLE001
             traceback.print_exc()
             if kind == "schedule":
-                _finish_schedule(int(item_id), "error", traceback.format_exc(limit=3), 0)
+                _finish_schedule(int(item_id), "error", traceback.format_exc(limit=3), 0, None)
             else:
                 _fail(str(item_id), traceback.format_exc(limit=3))
         finally:
@@ -67,15 +68,24 @@ def _fail(job_id: str, message: str) -> None:
 
 
 def _process_job(job_id: str) -> None:
-    _parse_into_job(job_id, fresh=True, auto_approve=True)
+    _parse_into_job(job_id, fresh=True, auto_approve=True, kind="job")
 
 
-def _parse_into_job(job_id: str, fresh: bool, auto_approve: bool) -> tuple[int, int]:
+def _parse_into_job(job_id: str, fresh: bool, auto_approve: bool, kind: str) -> tuple[int, int, int]:
+    try:
+        result = _parse_into_job_inner(job_id, fresh, auto_approve, kind)
+    except Exception:
+        metrics.PARSE_RUNS.labels(kind, "error").inc()
+        raise
+    return result
+
+
+def _parse_into_job_inner(job_id: str, fresh: bool, auto_approve: bool, kind: str) -> tuple[int, int, int]:
     """Ingest → extract → match, merging only titles not seen in earlier runs of this job.
 
     `fresh` jobs show stage progress and end in review; re-runs of an existing job stay
     silent so the review page keeps working while a scheduled parse is in progress.
-    Returns (new matches, new approved matches).
+    Returns (new matches, new approved matches, titles extracted from the source).
     """
     with get_session() as session:
         job = session.get(Job, job_id)
@@ -90,16 +100,22 @@ def _parse_into_job(job_id: str, fresh: bool, auto_approve: bool) -> tuple[int, 
     list_mode = content_kb.strategy_for(content_type) == "list_page"
 
     stage(INGESTING, "Fetching the list page" if list_mode else "Downloading & transcribing")
-    ingested = ingest.ingest(url, work_dir, content_type)
+    with metrics.stage_timer("ingest"):
+        ingested = ingest.ingest(url, work_dir, content_type)
 
     with get_session() as session:
         job = session.get(Job, job_id)
         job.source_text = ingested["source_text"]
 
     stage(EXTRACTING, "Finding movie titles")
-    candidates = extract.extract_titles(
-        ingested["source_text"], ingested["image_paths"], list_mode=list_mode
-    )
+    with metrics.stage_timer("extract"):
+        candidates = extract.extract_titles(
+            ingested["source_text"], ingested["image_paths"], list_mode=list_mode
+        )
+    has_evidence = bool(ingested["source_text"].strip() or ingested["image_paths"])
+    outcome = "ok" if candidates else ("no_titles" if has_evidence else "no_text")
+    metrics.PARSE_RUNS.labels(kind, outcome).inc()
+    match_started = time.monotonic()
 
     stage(MATCHING, "Matching posters on TMDB")
     added = added_approved = 0
@@ -130,6 +146,7 @@ def _parse_into_job(job_id: str, fresh: bool, auto_approve: bool) -> tuple[int, 
                     alternates_json="[]",
                 ))
                 added += 1
+                metrics.TITLES.labels(kind, "unmatched").inc()
                 continue
             best = matched["best"]
             if best["tmdb_id"] in seen_tmdb:
@@ -144,6 +161,9 @@ def _parse_into_job(job_id: str, fresh: bool, auto_approve: bool) -> tuple[int, 
             ))
             added += 1
             added_approved += state == APPROVED
+            metrics.TITLES.labels(kind, "matched").inc()
+
+    metrics.STAGE_SECONDS.labels("match").observe(time.monotonic() - match_started)
 
     # Suggest a list name from the analysis (before flipping to review so it's never blank).
     with get_session() as session:
@@ -155,7 +175,7 @@ def _parse_into_job(job_id: str, fresh: bool, auto_approve: bool) -> tuple[int, 
     stage(AWAITING_APPROVAL, "Review the matches")
     # Downloaded media is no longer needed once matching is done.
     shutil.rmtree(work_dir, ignore_errors=True)
-    return added, added_approved
+    return added, added_approved, len(candidates)
 
 
 # ---------------------------------------------------------------- scheduler
@@ -195,7 +215,9 @@ def _reset_interrupted_schedules() -> None:
             s.next_run_at = datetime.utcnow()
 
 
-def _finish_schedule(schedule_id: int, status: str, message: str, added: int) -> None:
+def _finish_schedule(schedule_id: int, status: str, message: str, added: int,
+                     extracted: int | None) -> None:
+    metrics.SCHEDULE_RUNS.labels("ok" if status == "ok" else "error").inc()
     with get_session() as session:
         s = session.get(Schedule, schedule_id)
         if not s:
@@ -206,6 +228,8 @@ def _finish_schedule(schedule_id: int, status: str, message: str, added: int) ->
         s.last_status = status
         s.last_message = message
         s.last_added = added
+        if extracted is not None:
+            s.last_extracted = extracted
 
 
 def _run_schedule(schedule_id: int) -> None:
@@ -228,16 +252,22 @@ def _run_schedule(schedule_id: int) -> None:
                                    ("kometa", s.publish_kometa)) if on]
 
     try:
-        added, added_approved = _parse_into_job(job_id, fresh=fresh, auto_approve=auto_approve)
+        added, added_approved, extracted = _parse_into_job(
+            job_id, fresh=fresh, auto_approve=auto_approve, kind="schedule")
     except Exception as exc:  # noqa: BLE001
         traceback.print_exc()
         if fresh:
             _fail(job_id, traceback.format_exc(limit=3))
-        _finish_schedule(schedule_id, "error", f"Parsing failed: {exc}", 0)
+        _finish_schedule(schedule_id, "error", f"Parsing failed: {exc}", 0, 0)
         return
 
-    notes = [f"{added} new title(s)" + (f", {added_approved} auto-approved" if added else "")]
+    notes = [f"{extracted} title(s) on the page, {added} new"
+             + (f", {added_approved} auto-approved" if added else "")]
     status = "ok"
+    if not extracted:
+        # An empty result for a scheduled list means the page/parser broke, not "nothing new".
+        status = "error"
+        notes.append("no titles extracted — the page layout or parser may have changed")
     with get_session() as session:
         job = session.get(Job, job_id)
         published = {p.target for p in job.publishes if p.status == "ok"}
@@ -250,7 +280,7 @@ def _run_schedule(schedule_id: int) -> None:
         notes.append(f"{target}: {detail}")
         if result == "error":
             status = "error"
-    _finish_schedule(schedule_id, status, " · ".join(notes), added)
+    _finish_schedule(schedule_id, status, " · ".join(notes), added, extracted)
 
 
 # ---------------------------------------------------------------- publishing
@@ -377,6 +407,7 @@ def _job_dict(session, job: Job) -> dict:
 
 
 def _record_publish(session, job_id: str, target: str, status: str, detail: str) -> None:
+    metrics.PUBLISHES.labels(target, "ok" if status == "ok" else "error").inc()
     session.add(Publish(job_id=job_id, target=target, status=status, detail=detail))
 
 
@@ -639,6 +670,7 @@ def _schedule_dict(session, s: Schedule) -> dict:
         "last_status": s.last_status or "",
         "last_message": s.last_message or "",
         "last_added": s.last_added or 0,
+        "last_extracted": s.last_extracted or 0,
     }
 
 
@@ -746,3 +778,9 @@ def run_schedule_now(schedule_id: int):
         s.next_run_at = datetime.utcnow()
     _job_queue.put(("schedule", schedule_id))
     return jsonify({"ok": True})
+
+
+@app.route("/metrics")
+def prometheus_metrics():
+    body, content_type = metrics.render()
+    return Response(body, mimetype=content_type.split(";")[0], content_type=content_type)

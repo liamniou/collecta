@@ -2,12 +2,14 @@
 import requests
 
 from . import config
+from .metrics import TMDB_REQUESTS
 
 _BASE = "https://api.themoviedb.org/3"
 
 
 def search(query: str, year: int | None = None, limit: int = 4, include_adult: bool = False) -> list[dict]:
     if not config.TMDB_API_KEY:
+        TMDB_REQUESTS.labels("not_configured").inc()
         return []
     params = {
         "api_key": config.TMDB_API_KEY,
@@ -20,7 +22,9 @@ def search(query: str, year: int | None = None, limit: int = 4, include_adult: b
         resp = requests.get(f"{_BASE}/search/movie", params=params, timeout=20)
         resp.raise_for_status()
         results = resp.json().get("results", [])
+        TMDB_REQUESTS.labels("ok").inc()
     except Exception as exc:  # noqa: BLE001
+        TMDB_REQUESTS.labels("error").inc()
         print(f"[tmdb] search failed for {query!r}: {exc}")
         return []
 

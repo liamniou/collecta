@@ -125,6 +125,7 @@ class Schedule(Base):
     last_status = Column(String(20), default="")  # queued | running | ok | error
     last_message = Column(Text, default="")
     last_added = Column(Integer, default=0)
+    last_extracted = Column(Integer, default=0)  # titles the source yielded on the last run
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -157,6 +158,9 @@ def _migrate():
             conn.exec_driver_sql("ALTER TABLE jobs ADD COLUMN radarr_checked_at DATETIME")
         if "content_type" not in cols:
             conn.exec_driver_sql("ALTER TABLE jobs ADD COLUMN content_type TEXT DEFAULT 'auto'")
+        sched_cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(schedules)")}
+        if "last_extracted" not in sched_cols:
+            conn.exec_driver_sql("ALTER TABLE schedules ADD COLUMN last_extracted INTEGER DEFAULT 0")
 
 
 @contextmanager
