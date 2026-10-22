@@ -1,346 +1,322 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Collecta · Schedules</title>
-  <style>
-    :root { --bg:#0a0a0b; --panel:#111113; --card:#161619; --border:#26262b; --accent:#6366f1; --accent-hover:#818cf8;
-      --text:#f4f4f5; --muted:#8b8b94; --ok:#3fb950; --danger:#e5484d; --warn:#d29922; }
-    * { box-sizing:border-box; }
-    body { margin:0; font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); }
-    header { padding:36px 20px 8px; text-align:center; }
-    header h1 { margin:0; font-size:28px; letter-spacing:.5px; font-weight:700; }
-    header h1 a { color:inherit; text-decoration:none; }
-    header h1 span { color:var(--accent); }
-    header p { color:var(--muted); margin:8px 0 0; font-size:14px; }
-    nav { display:flex; justify-content:center; gap:18px; margin-top:14px; font-size:14px; }
-    nav a { color:var(--muted); text-decoration:none; }
-    nav a.active, nav a:hover { color:var(--text); }
-    main { max-width:760px; margin:0 auto; padding:0 20px 60px; }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:24px; margin-top:20px; }
-    .card h2 { margin:0 0 16px; font-size:16px; }
-    label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
-    input[type=text], input[type=number], select { width:100%; padding:12px 14px; border-radius:8px; border:1px solid var(--border);
-      background:var(--panel); color:var(--text); font-size:15px; margin-bottom:16px; font-family:inherit; }
-    input:focus, select:focus { outline:none; border-color:#3a3a42; }
-    .row { display:flex; gap:12px; }
-    .row > div { flex:1; min-width:0; }
-    button { background:var(--accent); color:#fff; border:1px solid var(--accent); border-radius:8px; height:40px; padding:0 20px;
-      font-size:14px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; }
-    button:hover:not(:disabled) { background:var(--accent-hover); border-color:var(--accent-hover); }
-    button:disabled { opacity:.5; cursor:default; }
-    button.secondary { background:transparent; border:1px solid var(--border); color:var(--text); }
-    button.secondary:hover:not(:disabled) { background:rgba(255,255,255,.05); }
-    button.small { height:32px; padding:0 12px; font-size:13px; font-weight:500; }
-    button.danger { color:#e07a7d; }
-    button.danger:hover:not(:disabled) { background:rgba(229,72,77,.12); border-color:var(--danger); }
-    .muted { color:var(--muted); font-size:13px; }
-    .types { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
-    .type-pill { border:1px solid var(--border); background:var(--panel); color:var(--muted);
-      border-radius:8px; height:36px; padding:0 12px; font-size:13px; cursor:pointer; user-select:none; display:inline-flex; align-items:center; }
-    .type-pill:hover { border-color:#3a3a42; color:var(--text); }
-    .type-pill.active { border-color:var(--accent); background:rgba(99,102,241,.14); color:var(--text); }
-    .type-pill .sug { color:var(--accent); font-size:11px; margin-left:6px; }
-    .checks { display:grid; grid-template-columns:1fr 1fr; gap:10px 18px; margin-bottom:18px; }
-    .checks label { display:flex; gap:8px; align-items:flex-start; color:var(--text); font-size:14px; margin:0; cursor:pointer; }
-    .checks label small { display:block; color:var(--muted); font-size:12px; }
-    .checks input { margin-top:3px; accent-color:var(--accent); }
-    .go-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    #tmdbHint { margin:-6px 0 16px; }
-    a { color:#7aa2ff; }
-    .list h3 { font-size:12px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.7px; margin:28px 0 10px 4px; }
-    .sched { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-top:8px; }
-    .sched.paused { opacity:.6; }
-    .sched .top { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
-    .sched .name { font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .sched .name a { color:var(--text); text-decoration:none; }
-    .sched .name a:hover { text-decoration:underline; }
-    .sched .url { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .sched .url a { color:var(--muted); }
-    .sched .meta { font-size:12px; color:var(--muted); margin-top:8px; display:flex; flex-wrap:wrap; gap:6px 14px; }
-    .sched .msg { font-size:12px; margin-top:6px; color:var(--muted); white-space:pre-wrap; word-break:break-word; }
-    .sched .msg.error { color:#e69090; }
-    .sched .actions { display:flex; gap:6px; flex-shrink:0; }
-    .pill { display:inline-block; font-size:11px; padding:2px 8px; border-radius:5px; background:#2a2f3a; color:#9aa4b2; }
-    .pill.ok { background:rgba(63,185,80,.15); color:var(--ok); }
-    .pill.error { background:rgba(229,72,77,.15); color:#e69090; }
-    .pill.running, .pill.queued { background:rgba(99,102,241,.18); color:#a5a8ff; }
-    .tag { font-size:11px; color:var(--muted); border:1px solid var(--border); border-radius:5px; padding:1px 6px; }
-    .empty { color:var(--muted); font-size:14px; text-align:center; padding:24px; }
-    .sched.highlight { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
-    .existing { background:rgba(99,102,241,.10); border:1px solid rgba(99,102,241,.35); border-radius:8px; padding:10px 14px;
-      font-size:13px; margin-bottom:16px; }
-    input:disabled { opacity:.6; }
-    .types.locked { pointer-events:none; opacity:.6; }
-  </style>
-</head>
-<body>
-  <header>
-    <h1><a href="/">Collect<span>a</span></a></h1>
-    <p>Re-parse a list on a schedule &mdash; new titles are added to the same list and synced automatically.</p>
-    <nav><a href="/">Analyze a link</a><a href="/lists">Lists</a><a href="/schedules" class="active">Schedules</a></nav>
-  </header>
-  <main>
-    <div class="card">
-      <h2 id="formTitle">New scheduled parsing</h2>
-      <div class="existing" id="existingNote" style="display:none"></div>
-      <label for="url">Link (use a <code>#Section</code> anchor to parse only that section of a page)</label>
-      <input type="text" id="url" placeholder="https://en.wikipedia.org/wiki/Grand_Prix_(Cannes_Film_Festival)#Winners">
-      <label for="name">List name (optional &mdash; suggested from the page if empty)</label>
-      <input type="text" id="name" placeholder="Cannes Grand Prix Winners">
-      <label>Content type</label>
-      <div class="types" id="typeChooser"></div>
-      <div class="row">
-        <div>
-          <label for="freq">Frequency</label>
-          <select id="freq">
-            <option value="24">Daily</option>
-            <option value="168" selected>Weekly</option>
-            <option value="720">Monthly (30 days)</option>
-            <option value="custom">Custom…</option>
-          </select>
-        </div>
-        <div id="customWrap" style="display:none">
-          <label for="hours">Every N hours</label>
-          <input type="number" id="hours" min="1" max="8784" value="72">
-        </div>
-      </div>
-      <label>On each run</label>
-      <div class="checks">
-        <label><input type="checkbox" id="auto_approve" checked><span>Auto-approve new matches<small>Confident TMDB matches go straight into the list</small></span></label>
-        <label><input type="checkbox" id="publish_tmdb"><span>Sync TMDB list<small>Create / re-sync when new titles arrive</small></span></label>
-        <label><input type="checkbox" id="publish_radarr"><span>Add list to Radarr<small>Registers the TMDB list once (needs TMDB sync)</small></span></label>
-        <label><input type="checkbox" id="publish_kometa"><span>Update Kometa collection<small>Rewrites the collection when new titles arrive</small></span></label>
-        <label id="runNowWrap"><input type="checkbox" id="run_now" checked><span>Run the first parse now</span></label>
-      </div>
-      <div class="muted" id="tmdbHint" style="display:none"></div>
-      <div class="go-row">
-        <button id="save">Create schedule</button>
-        <button class="secondary" id="cancelEdit" style="display:none">Cancel</button>
-        <span class="muted" id="msg"></span>
+{% extends "base.html" %}
+{% block title %}Schedules{% endblock %}
+{% block topbar_title %}<span class="cur">Schedules</span>{% endblock %}
+{% block actions %}
+  <button class="btn sm" id="newSchedule">{{ icon('plus', 15) }}New schedule</button>
+{% endblock %}
+{% block style %}
+<style>
+  tr.highlight td { background:color-mix(in srgb, var(--info) 8%, transparent); }
+  tr.paused td:not(:last-child) { opacity:.55; }
+  .msg-line { font-size:12.5px; color:var(--muted-foreground); margin-top:3px; max-width:560px; white-space:normal;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .msg-line.error { color:var(--destructive); }
+  .checks { display:grid; grid-template-columns:1fr 1fr; gap:14px 20px; }
+  .existing { font-size:13px; padding:10px 14px; border-radius:10px; background:var(--muted); margin-bottom:18px; }
+  .existing a { font-weight:500; }
+  #tmdbHint { margin-top:14px; }
+  @media (max-width: 640px) { .checks { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page">
+  <div class="card">
+    <div class="card-header">
+      <div class="grow"><h2 class="card-title">Scheduled parsings</h2>
+        <p class="card-desc">Each run re-parses the link and adds new titles to the same list, then syncs the targets you picked.</p></div>
+    </div>
+    <div class="card-body flush">
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr>
+            <th>List</th><th>Status</th><th class="hide-sm">Frequency</th><th class="hide-sm">Last run</th><th>Next run</th>
+            <th class="num">Titles</th><th class="hide-sm">On each run</th><th></th>
+          </tr></thead>
+          <tbody id="list"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+        </table>
       </div>
     </div>
+  </div>
+</div>
 
-    <div class="list">
-      <h3>Scheduled parsings</h3>
-      <div id="list"><div class="empty">Loading…</div></div>
+<dialog id="formDlg" style="width:min(640px, calc(100vw - 32px))">
+  <div class="dlg-head"><div style="flex:1"><h3 id="formTitle">New scheduled parsing</h3>
+    <p>New titles are merged into the list; rejected titles stay rejected.</p></div>
+    <button class="btn ghost sm icon-only" id="closeDlg" title="Close">{{ icon('x') }}</button>
+  </div>
+  <div class="dlg-body">
+    <div class="existing" id="existingNote" hidden></div>
+    <div class="field">
+      <label class="label" for="url">Link</label>
+      <input class="input" type="text" id="url" placeholder="https://en.wikipedia.org/wiki/Grand_Prix_(Cannes_Film_Festival)#Winners">
+      <div class="hint">Use a <code>#Section</code> anchor to parse only that section of a page.</div>
     </div>
-  </main>
+    <div class="field">
+      <label class="label" for="name">List name <span class="muted">(optional)</span></label>
+      <input class="input" type="text" id="name" placeholder="Suggested from the page if empty">
+    </div>
+    <div class="field">
+      <label class="label">Content type</label>
+      <div class="chips" id="typeChooser"></div>
+    </div>
+    <div class="field" style="display:flex; gap:12px; align-items:flex-end">
+      <div style="flex:1">
+        <label class="label" for="freq">Frequency</label>
+        <select id="freq">
+          <option value="24">Daily</option>
+          <option value="168" selected>Weekly</option>
+          <option value="720">Monthly (30 days)</option>
+          <option value="custom">Custom…</option>
+        </select>
+      </div>
+      <div id="customWrap" hidden style="width:160px">
+        <label class="label" for="hours">Every N hours</label>
+        <input class="input" type="number" id="hours" min="1" max="8784" value="72">
+      </div>
+    </div>
+    <label class="label">On each run</label>
+    <div class="checks">
+      <label class="check"><input type="checkbox" id="auto_approve" checked><span>Auto-approve new matches<small>Confident TMDB matches go straight into the list</small></span></label>
+      <label class="check"><input type="checkbox" id="publish_tmdb"><span>Sync TMDB list<small>Create / re-sync when new titles arrive</small></span></label>
+      <label class="check"><input type="checkbox" id="publish_radarr"><span>Add list to Radarr<small>Registers the TMDB list once (needs TMDB sync)</small></span></label>
+      <label class="check"><input type="checkbox" id="publish_kometa"><span>Update Kometa collection<small>Rewrites the collection when new titles arrive</small></span></label>
+      <label class="check" id="runNowWrap"><input type="checkbox" id="run_now" checked><span>Run the first parse now</span></label>
+    </div>
+    <div class="alert" id="tmdbHint" hidden>{{ icon('alert') }}<div></div></div>
+  </div>
+  <div class="dlg-foot">
+    <span class="muted" id="msg"></span>
+    <button class="btn outline" id="cancelEdit">Cancel</button>
+    <button class="btn" id="save">Create schedule</button>
+  </div>
+</dialog>
+{% endblock %}
 
-  <script>
-    const $ = (id) => document.getElementById(id);
-    const FLAGS = ['auto_approve', 'publish_tmdb', 'publish_radarr', 'publish_kometa'];
-    let selectedType = 'auto', userPickedType = false, editingId = null, SCHEDULES = [], pollTimer;
-    let existingJob = null; // list being scheduled (source is fixed, titles merge into it)
+{% block scripts %}
+<script>
+  const $ = (id) => document.getElementById(id);
+  const FLAGS = ['auto_approve', 'publish_tmdb', 'publish_radarr', 'publish_kometa'];
+  let selectedType = 'auto', userPickedType = false, editingId = null, SCHEDULES = [], pollTimer;
+  let existingJob = null; // list being scheduled (source is fixed, titles merge into it)
+  const dlg = $('formDlg');
 
-    function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+  function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
 
-    async function loadTypes(url) {
-      const q = url ? ('?url=' + encodeURIComponent(url)) : '';
-      const d = await (await fetch('/api/content-types' + q)).json();
-      const suggested = d.suggested || 'auto';
-      if (!userPickedType) selectedType = suggested;
-      $('typeChooser').innerHTML = d.types.map(t => {
-        const active = t.id === selectedType ? ' active' : '';
-        const sug = (t.id === suggested && suggested !== 'auto') ? '<span class="sug">detected</span>' : '';
-        return '<div class="type-pill' + active + '" data-id="' + t.id + '" title="' + esc(t.description) + '">' + esc(t.label) + sug + '</div>';
-      }).join('');
-      $('typeChooser').querySelectorAll('.type-pill').forEach(p => p.onclick = () => {
-        userPickedType = true; selectedType = p.dataset.id;
-        $('typeChooser').querySelectorAll('.type-pill').forEach(x => x.classList.toggle('active', x === p));
-      });
-    }
-    let detectTimer;
-    $('url').addEventListener('input', () => {
-      clearTimeout(detectTimer);
-      detectTimer = setTimeout(() => loadTypes($('url').value.trim()), 350);
+  async function loadTypes(url) {
+    const q = url ? ('?url=' + encodeURIComponent(url)) : '';
+    const d = await (await fetch('/api/content-types' + q)).json();
+    const suggested = d.suggested || 'auto';
+    if (!userPickedType) selectedType = suggested;
+    $('typeChooser').innerHTML = d.types.map(t => {
+      const active = t.id === selectedType ? ' active' : '';
+      const sug = (t.id === suggested && suggested !== 'auto') ? '<span class="sug">· detected</span>' : '';
+      return '<button type="button" class="type-pill' + active + '" data-id="' + t.id + '" title="' + esc(t.description) + '">' + esc(t.label) + sug + '</button>';
+    }).join('');
+    $('typeChooser').querySelectorAll('.type-pill').forEach(p => p.onclick = () => {
+      userPickedType = true; selectedType = p.dataset.id;
+      $('typeChooser').querySelectorAll('.type-pill').forEach(x => x.classList.toggle('active', x === p));
     });
+  }
+  let detectTimer;
+  $('url').addEventListener('input', () => {
+    clearTimeout(detectTimer);
+    detectTimer = setTimeout(() => loadTypes($('url').value.trim()), 350);
+  });
 
-    $('freq').onchange = () => { $('customWrap').style.display = $('freq').value === 'custom' ? 'block' : 'none'; };
-    // Radarr reads the TMDB list, so it implies TMDB sync.
-    $('publish_radarr').onchange = () => { if ($('publish_radarr').checked) $('publish_tmdb').checked = true; updateHint(); };
-    $('publish_tmdb').onchange = () => { if (!$('publish_tmdb').checked) $('publish_radarr').checked = false; updateHint(); };
+  $('freq').onchange = () => { $('customWrap').hidden = $('freq').value !== 'custom'; };
+  // Radarr reads the TMDB list, so it implies TMDB sync.
+  $('publish_radarr').onchange = () => { if ($('publish_radarr').checked) $('publish_tmdb').checked = true; updateHint(); };
+  $('publish_tmdb').onchange = () => { if (!$('publish_tmdb').checked) $('publish_radarr').checked = false; updateHint(); };
 
-    let TMDB = { authed: true };
-    async function loadTmdb() { try { TMDB = await (await fetch('/api/tmdb/status')).json(); } catch (e) {} updateHint(); }
-    function updateHint() {
-      const show = $('publish_tmdb').checked && !TMDB.authed;
-      $('tmdbHint').style.display = show ? 'block' : 'none';
-      $('tmdbHint').innerHTML = 'TMDB account is not connected yet &mdash; connect it from any list page (Publish section) before the first sync.';
-    }
+  let TMDB = { authed: true };
+  async function loadTmdb() { try { TMDB = await (await fetch('/api/tmdb/status')).json(); } catch (e) {} updateHint(); }
+  function updateHint() {
+    $('tmdbHint').hidden = !($('publish_tmdb').checked && !TMDB.authed);
+    $('tmdbHint').querySelector('div').textContent = 'TMDB account is not connected yet — connect it from any list page (Publish section) before the first sync.';
+  }
 
-    function intervalHours() {
-      return $('freq').value === 'custom' ? parseInt($('hours').value, 10) : parseInt($('freq').value, 10);
-    }
+  function intervalHours() {
+    return $('freq').value === 'custom' ? parseInt($('hours').value, 10) : parseInt($('freq').value, 10);
+  }
 
-    function setExisting(job) {
-      existingJob = job;
-      $('existingNote').style.display = job ? 'block' : 'none';
-      $('existingNote').innerHTML = job ? 'Scheduling the existing list <a href="/job/' + esc(job.id) + '">' + esc(job.list_name || job.source_url) +
-        '</a> (' + job.matches.length + ' titles). New titles are added to it; its TMDB list, Radarr and Kometa links are kept.' : '';
-      $('url').disabled = !!job;
-      $('typeChooser').classList.toggle('locked', !!job);
-    }
+  function setExisting(job) {
+    existingJob = job;
+    $('existingNote').hidden = !job;
+    $('existingNote').innerHTML = job ? 'Scheduling the existing list <a href="/job/' + esc(job.id) + '">' + esc(job.list_name || job.source_url) +
+      '</a> (' + job.matches.length + ' titles). New titles are added to it; its TMDB list, Radarr and Kometa links are kept.' : '';
+    $('url').disabled = !!job;
+    $('typeChooser').classList.toggle('locked', !!job);
+  }
 
-    function resetForm() {
-      editingId = null; userPickedType = false;
-      setExisting(null);
-      if (location.search) history.replaceState(null, '', '/schedules' + location.hash);
-      $('formTitle').textContent = 'New scheduled parsing';
-      $('save').textContent = 'Create schedule';
-      $('cancelEdit').style.display = 'none';
-      $('runNowWrap').style.display = '';
-      $('url').value = ''; $('name').value = '';
-      $('freq').value = '168'; $('freq').onchange();
-      $('auto_approve').checked = true; $('run_now').checked = true;
-      ['publish_tmdb', 'publish_radarr', 'publish_kometa'].forEach(f => $(f).checked = false);
-      $('msg').textContent = '';
-      updateHint(); loadTypes();
-    }
+  function resetForm() {
+    editingId = null; userPickedType = false;
+    setExisting(null);
+    if (location.search) history.replaceState(null, '', '/schedules' + location.hash);
+    $('formTitle').textContent = 'New scheduled parsing';
+    $('save').textContent = 'Create schedule';
+    $('runNowWrap').hidden = false;
+    $('url').value = ''; $('name').value = '';
+    $('freq').value = '168'; $('freq').onchange();
+    $('auto_approve').checked = true; $('run_now').checked = true;
+    ['publish_tmdb', 'publish_radarr', 'publish_kometa'].forEach(f => $(f).checked = false);
+    $('msg').textContent = '';
+    updateHint(); loadTypes();
+  }
 
-    function editSchedule(id) {
-      const s = SCHEDULES.find(x => x.id === id); if (!s) return;
-      editingId = id; userPickedType = true; selectedType = s.content_type;
-      $('formTitle').textContent = 'Edit scheduled parsing';
-      $('save').textContent = 'Save changes';
-      $('cancelEdit').style.display = '';
-      $('runNowWrap').style.display = 'none';
-      $('url').value = s.source_url; $('name').value = s.name;
-      const preset = ['24', '168', '720'].includes(String(s.interval_hours));
-      $('freq').value = preset ? String(s.interval_hours) : 'custom';
-      $('hours').value = s.interval_hours; $('freq').onchange();
-      FLAGS.forEach(f => $(f).checked = !!s[f]);
-      $('msg').textContent = '';
-      updateHint(); loadTypes(s.source_url);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-    $('cancelEdit').onclick = resetForm;
+  function openNew() { resetForm(); dlg.showModal(); $('url').focus(); }
+  // Don't let the dialog autofocus its close button.
+  dlg.addEventListener('focusin', (e) => { if (e.target.id === 'closeDlg' && !dlg.dataset.focused) { dlg.dataset.focused = 1; ($('url').disabled ? $('name') : $('url')).focus(); } });
+  dlg.addEventListener('close', () => { delete dlg.dataset.focused; });
+  $('newSchedule').onclick = openNew;
+  $('closeDlg').onclick = $('cancelEdit').onclick = () => { dlg.close(); resetForm(); };
 
-    $('save').onclick = async () => {
-      const url = $('url').value.trim();
-      if (!url) { $('msg').textContent = 'Enter a link first.'; return; }
-      const hours = intervalHours();
-      if (!hours || hours < 1) { $('msg').textContent = 'Enter a valid interval.'; return; }
-      const body = { url, name: $('name').value.trim(), content_type: selectedType, interval_hours: hours };
-      FLAGS.forEach(f => body[f] = $(f).checked);
-      if (!editingId) body.run_now = $('run_now').checked;
-      if (existingJob && !editingId) { body.job_id = existingJob.id; delete body.url; delete body.content_type; }
-      $('save').disabled = true; $('msg').textContent = 'Saving…';
-      try {
-        const r = await fetch(editingId ? '/api/schedules/' + editingId : '/api/schedules', {
-          method: editingId ? 'PATCH' : 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
-        });
-        const d = await r.json();
-        if (!r.ok) {
-          $('msg').textContent = d.error || 'Failed.';
-          if (d.schedule_id) { $('msg').innerHTML = esc(d.error) + ' <a href="#s-' + d.schedule_id + '">Show it</a>'; }
-        }
-        else { resetForm(); $('msg').textContent = 'Saved.'; loadList(); }
-      } catch (e) { $('msg').textContent = 'Request failed.'; }
-      $('save').disabled = false;
-    };
-
-    function freqLabel(h) {
-      if (h === 24) return 'Daily';
-      if (h === 168) return 'Weekly';
-      if (h === 720) return 'Monthly';
-      if (h % 24 === 0) return 'Every ' + (h / 24) + ' days';
-      return 'Every ' + h + 'h';
-    }
-    function rel(iso) {
-      if (!iso) return '—';
-      const diff = (new Date(iso) - Date.now()) / 1000, a = Math.abs(diff);
-      const txt = a < 60 ? 'moments' : a < 3600 ? Math.round(a/60) + ' min' : a < 86400 ? Math.round(a/3600) + ' h' : Math.round(a/86400) + ' d';
-      return diff >= 0 ? 'in ' + txt : txt + ' ago';
-    }
-    const STATUS = { ok:'ok', error:'error', running:'running…', queued:'queued' };
-
-    function render() {
-      if (!SCHEDULES.length) { $('list').innerHTML = '<div class="empty">No scheduled parsings yet.</div>'; return; }
-      $('list').innerHTML = SCHEDULES.map(s => {
-        const name = s.name || s.list_name || s.source_url;
-        const nameHtml = s.job_id ? '<a href="/job/' + s.job_id + '">' + esc(name) + '</a>' : esc(name);
-        const active = s.last_status === 'running' || s.last_status === 'queued';
-        const st = s.last_status ? '<span class="pill ' + esc(s.last_status) + '">' + esc(STATUS[s.last_status] || s.last_status) + '</span>' : '<span class="pill">never run</span>';
-        const tags = [s.auto_approve && 'auto-approve', s.publish_tmdb && 'TMDB', s.publish_radarr && 'Radarr', s.publish_kometa && 'Kometa']
-          .filter(Boolean).map(t => '<span class="tag">' + t + '</span>').join(' ');
-        const hl = location.hash === '#s-' + s.id ? ' highlight' : '';
-        return '<div class="sched' + (s.enabled ? '' : ' paused') + hl + '" id="s-' + s.id + '">' +
-          '<div class="top"><div style="min-width:0">' +
-            '<div class="name">' + nameHtml + '</div>' +
-            '<div class="url"><a href="' + esc(s.source_url) + '" target="_blank" rel="noopener">' + esc(s.source_url) + '</a></div></div>' +
-            '<div class="actions">' +
-              '<button class="secondary small" data-act="run" data-id="' + s.id + '"' + (active ? ' disabled' : '') + '>Run now</button>' +
-              '<button class="secondary small" data-act="toggle" data-id="' + s.id + '">' + (s.enabled ? 'Pause' : 'Resume') + '</button>' +
-              '<button class="secondary small" data-act="edit" data-id="' + s.id + '">Edit</button>' +
-              '<button class="secondary small danger" data-act="del" data-id="' + s.id + '" title="Delete schedule (the list is kept)">✕</button>' +
-            '</div></div>' +
-          '<div class="meta">' + st +
-            '<span>' + freqLabel(s.interval_hours) + (s.enabled ? '' : ' · paused') + '</span>' +
-            '<span>Last run: ' + rel(s.last_run_at) + '</span>' +
-            '<span>Next: ' + (s.enabled ? rel(s.next_run_at) : '—') + '</span>' +
-            '<span>' + s.count + ' titles · ' + s.approved + ' approved' + (s.review ? ' · ' + s.review + ' to review' : '') + '</span>' +
-            (tags ? '<span>' + tags + '</span>' : '') +
-          '</div>' +
-          (s.last_message ? '<div class="msg' + (s.last_status === 'error' ? ' error' : '') + '">' + esc(s.last_message) + '</div>' : '') +
-        '</div>';
-      }).join('');
-      $('list').querySelectorAll('button[data-act]').forEach(b => b.onclick = () => act(b.dataset.act, parseInt(b.dataset.id, 10), b));
-    }
-
-    async function act(action, id, btn) {
-      const s = SCHEDULES.find(x => x.id === id);
-      if (action === 'edit') return editSchedule(id);
-      if (action === 'del' && !confirm('Delete this schedule? The collected list is kept.')) return;
-      btn.disabled = true;
-      const req = {
-        run: ['/api/schedules/' + id + '/run', { method: 'POST' }],
-        toggle: ['/api/schedules/' + id, { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enabled: !s.enabled }) }],
-        del: ['/api/schedules/' + id, { method: 'DELETE' }],
-      }[action];
-      try {
-        const r = await fetch(...req);
-        if (!r.ok) alert((await r.json()).error || 'Failed.');
-      } catch (e) { alert('Request failed.'); }
-      if (action === 'del' && editingId === id) resetForm();
-      loadList();
-    }
-
-    async function loadList() {
-      clearTimeout(pollTimer);
-      try {
-        SCHEDULES = (await (await fetch('/api/schedules')).json()).schedules || [];
-        render();
-        if (!loadList.scrolled && location.hash.startsWith('#s-') && $(location.hash.slice(1))) {
-          loadList.scrolled = true; $(location.hash.slice(1)).scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      } catch (e) { /* ignore */ }
-      const busy = SCHEDULES.some(s => s.last_status === 'running' || s.last_status === 'queued');
-      pollTimer = setTimeout(loadList, busy ? 3000 : 30000);
-    }
-
-    const qs = new URLSearchParams(location.search);
+  function editSchedule(id) {
+    const s = SCHEDULES.find(x => x.id === id); if (!s) return;
     resetForm();
-    if (qs.get('job_id')) {
-      fetch('/api/jobs/' + encodeURIComponent(qs.get('job_id'))).then(r => r.json()).then(job => {
-        if (!job.id) { $('msg').textContent = 'List not found.'; return; }
-        $('url').value = job.source_url; $('name').value = job.list_name || '';
-        selectedType = job.content_type || 'auto'; userPickedType = true;
-        // Pre-tick the targets this list was already published to.
-        const done = new Set((job.publishes || []).filter(p => p.status === 'ok').map(p => p.target));
-        $('publish_tmdb').checked = done.has('tmdb'); $('publish_radarr').checked = done.has('radarr');
-        $('publish_kometa').checked = done.has('kometa');
-        setExisting(job); updateHint(); loadTypes(job.source_url);
+    editingId = id; userPickedType = true; selectedType = s.content_type;
+    $('formTitle').textContent = 'Edit scheduled parsing';
+    $('save').textContent = 'Save changes';
+    $('runNowWrap').hidden = true;
+    $('url').value = s.source_url; $('name').value = s.name;
+    const preset = ['24', '168', '720'].includes(String(s.interval_hours));
+    $('freq').value = preset ? String(s.interval_hours) : 'custom';
+    $('hours').value = s.interval_hours; $('freq').onchange();
+    FLAGS.forEach(f => $(f).checked = !!s[f]);
+    updateHint(); loadTypes(s.source_url);
+    dlg.showModal();
+  }
+
+  $('save').onclick = async () => {
+    const url = $('url').value.trim();
+    if (!url) { $('msg').textContent = 'Enter a link first.'; return; }
+    const hours = intervalHours();
+    if (!hours || hours < 1) { $('msg').textContent = 'Enter a valid interval.'; return; }
+    const body = { url, name: $('name').value.trim(), content_type: selectedType, interval_hours: hours };
+    FLAGS.forEach(f => body[f] = $(f).checked);
+    if (!editingId) body.run_now = $('run_now').checked;
+    if (existingJob && !editingId) { body.job_id = existingJob.id; delete body.url; delete body.content_type; }
+    $('save').disabled = true; $('msg').textContent = 'Saving…';
+    try {
+      const r = await fetch(editingId ? '/api/schedules/' + editingId : '/api/schedules', {
+        method: editingId ? 'PATCH' : 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
       });
-    } else if (qs.get('url')) {
-      $('url').value = qs.get('url');
-      $('name').value = qs.get('name') || '';
-      if (qs.get('type') && qs.get('type') !== 'pasted_text') { selectedType = qs.get('type'); userPickedType = selectedType !== 'auto'; }
-      loadTypes(qs.get('url'));
+      const d = await r.json();
+      if (!r.ok) {
+        $('msg').textContent = d.error || 'Failed.';
+        if (d.schedule_id) $('msg').innerHTML = esc(d.error) + ' <a href="#s-' + d.schedule_id + '" onclick="document.getElementById(\'formDlg\').close()">Show it</a>';
+      } else {
+        dlg.close(); toast(editingId ? 'Schedule updated.' : 'Schedule created.');
+        resetForm(); loadList(); refreshSidebar();
+      }
+    } catch (e) { $('msg').textContent = 'Request failed.'; }
+    $('save').disabled = false;
+  };
+
+  function freqLabel(h) {
+    if (h === 24) return 'Daily';
+    if (h === 168) return 'Weekly';
+    if (h === 720) return 'Monthly';
+    if (h % 24 === 0) return 'Every ' + (h / 24) + ' days';
+    return 'Every ' + h + 'h';
+  }
+  function rel(iso) {
+    if (!iso) return '—';
+    const diff = (new Date(iso) - Date.now()) / 1000, a = Math.abs(diff);
+    const txt = a < 60 ? 'moments' : a < 3600 ? Math.round(a/60) + ' min' : a < 86400 ? Math.round(a/3600) + ' h' : Math.round(a/86400) + ' d';
+    return diff >= 0 ? 'in ' + txt : txt + ' ago';
+  }
+  const STATUS = { ok:['OK','success'], error:['Failed','destructive'], running:['Running','info'], queued:['Queued','info'] };
+
+  function render() {
+    if (!SCHEDULES.length) {
+      $('list').innerHTML = '<tr><td colspan="8" class="empty">No scheduled parsings yet. Click <b>New schedule</b>, or use <b>Schedule</b> on any list.</td></tr>';
+      return;
     }
-    loadTmdb();
-    loadList();
-  </script>
-</body>
-</html>
+    $('list').innerHTML = SCHEDULES.map(s => {
+      const name = s.name || s.list_name || s.source_url;
+      const nameHtml = s.job_id ? '<a class="cell-main" href="/job/' + s.job_id + '">' + esc(name) + '</a>' : '<span class="cell-main">' + esc(name) + '</span>';
+      const active = s.last_status === 'running' || s.last_status === 'queued';
+      const [label, kind] = STATUS[s.last_status] || ['Never run', 'outline'];
+      const dotState = s.enabled ? (s.last_status || 'never') : 'paused';
+      const tags = [s.auto_approve && 'Auto-approve', s.publish_tmdb && 'TMDB', s.publish_radarr && 'Radarr', s.publish_kometa && 'Kometa']
+        .filter(Boolean).map(t => '<span class="badge">' + t + '</span>').join(' ');
+      const hl = location.hash === '#s-' + s.id ? ' highlight' : '';
+      return '<tr id="s-' + s.id + '" class="' + (s.enabled ? '' : 'paused') + hl + '">' +
+        '<td>' + nameHtml +
+          '<a class="cell-sub" href="' + esc(s.source_url) + '" target="_blank" rel="noopener">' + esc(s.source_url) + '</a>' +
+          (s.last_message ? '<div class="msg-line' + (s.last_status === 'error' ? ' error' : '') + '" title="' + esc(s.last_message) + '">' + esc(s.last_message) + '</div>' : '') +
+        '</td>' +
+        '<td class="shrink"><span class="badge ' + kind + '"><span class="dot ' + dotState + '"></span>' + (s.enabled ? label : 'Paused') + '</span></td>' +
+        '<td class="shrink hide-sm">' + freqLabel(s.interval_hours) + '</td>' +
+        '<td class="shrink hide-sm muted">' + rel(s.last_run_at) + '</td>' +
+        '<td class="shrink">' + (s.enabled ? rel(s.next_run_at) : '<span class="muted">—</span>') + '</td>' +
+        '<td class="num shrink">' + s.approved + '<span class="muted">/' + s.count + '</span>' +
+          (s.review ? ' <span class="badge warning">' + s.review + ' to review</span>' : '') + '</td>' +
+        '<td class="shrink hide-sm">' + (tags || '<span class="muted">—</span>') + '</td>' +
+        '<td class="shrink"><div class="row-actions">' +
+          '<button class="btn ghost sm icon-only" data-act="run" data-id="' + s.id + '" title="Run now"' + (active ? ' disabled' : '') + '>' + ICON(active ? 'refresh' : 'play', 15) + '</button>' +
+          '<button class="btn ghost sm icon-only" data-act="toggle" data-id="' + s.id + '" title="' + (s.enabled ? 'Pause' : 'Resume') + '">' + ICON(s.enabled ? 'pause' : 'play', 15) + '</button>' +
+          '<button class="btn ghost sm icon-only" data-act="edit" data-id="' + s.id + '" title="Edit">' + ICON('pencil', 15) + '</button>' +
+          '<button class="btn danger-ghost sm icon-only" data-act="del" data-id="' + s.id + '" title="Delete schedule (the list is kept)">' + ICON('trash', 15) + '</button>' +
+        '</div></td></tr>';
+    }).join('');
+    $('list').querySelectorAll('button[data-act]').forEach(b => b.onclick = () => act(b.dataset.act, parseInt(b.dataset.id, 10), b));
+  }
+
+  async function act(action, id, btn) {
+    const s = SCHEDULES.find(x => x.id === id);
+    if (action === 'edit') return editSchedule(id);
+    if (action === 'del' && !confirm('Delete this schedule? The collected list is kept.')) return;
+    btn.disabled = true;
+    const req = {
+      run: ['/api/schedules/' + id + '/run', { method: 'POST' }],
+      toggle: ['/api/schedules/' + id, { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enabled: !s.enabled }) }],
+      del: ['/api/schedules/' + id, { method: 'DELETE' }],
+    }[action];
+    try {
+      const r = await fetch(...req);
+      if (!r.ok) toast((await r.json()).error || 'Failed.', 'error');
+      else if (action === 'run') toast('Run queued.');
+    } catch (e) { toast('Request failed.', 'error'); }
+    loadList(); refreshSidebar();
+  }
+
+  async function loadList() {
+    clearTimeout(pollTimer);
+    try {
+      SCHEDULES = (await (await fetch('/api/schedules')).json()).schedules || [];
+      render();
+      if (!loadList.scrolled && location.hash.startsWith('#s-') && $(location.hash.slice(1))) {
+        loadList.scrolled = true; $(location.hash.slice(1)).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } catch (e) { /* ignore */ }
+    const busy = SCHEDULES.some(s => s.last_status === 'running' || s.last_status === 'queued');
+    pollTimer = setTimeout(loadList, busy ? 3000 : 30000);
+  }
+  window.addEventListener('hashchange', render);
+
+  const qs = new URLSearchParams(location.search);
+  resetForm();
+  if (qs.get('job_id')) {
+    fetch('/api/jobs/' + encodeURIComponent(qs.get('job_id'))).then(r => r.json()).then(job => {
+      if (!job.id) { toast('List not found.', 'error'); return; }
+      $('url').value = job.source_url; $('name').value = job.list_name || '';
+      selectedType = job.content_type || 'auto'; userPickedType = true;
+      // Pre-tick the targets this list was already published to.
+      const done = new Set((job.publishes || []).filter(p => p.status === 'ok').map(p => p.target));
+      $('publish_tmdb').checked = done.has('tmdb'); $('publish_radarr').checked = done.has('radarr');
+      $('publish_kometa').checked = done.has('kometa');
+      setExisting(job); updateHint(); loadTypes(job.source_url);
+      dlg.showModal();
+    });
+  } else if (qs.get('url')) {
+    $('url').value = qs.get('url');
+    $('name').value = qs.get('name') || '';
+    if (qs.get('type') && qs.get('type') !== 'pasted_text') { selectedType = qs.get('type'); userPickedType = selectedType !== 'auto'; }
+    loadTypes(qs.get('url'));
+    dlg.showModal();
+  }
+  loadTmdb();
+  loadList();
+</script>
+{% endblock %}

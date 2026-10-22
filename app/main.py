@@ -20,6 +20,15 @@ from .publishers import kometa, radarr, tmdb_list
 app = Flask(__name__, template_folder="templates")
 CORS(app)
 
+
+@app.context_processor
+def _template_helpers():
+    from markupsafe import Markup
+
+    from .icons import ICONS, svg
+
+    return {"icon": lambda name, size=16, cls="": Markup(svg(name, size, cls)), "ICONS": ICONS}
+
 # Items are (kind, id): ("job", job_id) for one-off parsings, ("schedule", schedule_id) for scheduled ones.
 _job_queue: "queue.Queue[tuple[str, str | int]]" = queue.Queue()
 
