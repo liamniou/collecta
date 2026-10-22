@@ -38,6 +38,8 @@ def ingest(url: str, work_dir: str, content_type: str = "auto") -> dict:
         return _ingest_reddit(url, work_dir)
     if strategy == "text":
         return _ingest_text(url, work_dir)
+    if strategy == "list_page":
+        return _ingest_list_page(url)
     return _ingest_auto(url, work_dir)
 
 
@@ -200,6 +202,86 @@ def _ingest_reddit(url: str, work_dir: str) -> dict:
     # Post body only (title + selftext); comments are intentionally excluded.
     result = _scrape_reddit(url, work_dir)
     return _finish([result["text"]], [])
+
+
+_HEADINGS = ("h1", "h2", "h3", "h4", "h5", "h6")
+_DROP_TAGS = ("script", "style", "sup", "noscript", "figure")
+_DROP_CLASSES = ("mw-editsection", "reference", "navbox", "reflist", "mw-references-wrap", "noprint")
+
+
+def _ingest_list_page(url: str) -> dict:
+    """Structured list/table page: keep row structure, optionally scoped to the #fragment section."""
+    page_url, _, fragment = url.partition("#")
+    html = _http_get_html(page_url) or _fetch_with_camoufox(page_url)
+    if not html:
+        return _finish([], [])
+    soup = BeautifulSoup(html, "lxml")
+    for tag in soup.find_all(_DROP_TAGS):
+        tag.decompose()
+    for cls in _DROP_CLASSES:
+        for tag in soup.find_all(class_=cls):
+            tag.decompose()
+
+    title = soup.title.get_text(" ", strip=True) if soup.title else ""
+    nodes = _section_nodes(soup, fragment) if fragment else None
+    if nodes is None:
+        if fragment:
+            print(f"[ingest] section #{fragment} not found; using the whole page")
+        root = soup.find(id="mw-content-text") or soup.find("main") or soup.find("article") or soup.body
+        nodes = [root] if root else []
+    lines: list[str] = [f"Page: {title}" + (f" — section: {fragment.replace('_', ' ')}" if fragment else "")]
+    for node in nodes:
+        _render_node(node, lines)
+    text = "\n".join(ln for ln in lines if ln.strip())
+    print(f"[ingest] list page: {len(text)} chars" + (f" (section #{fragment})" if fragment else ""))
+    return _finish([text], [])
+
+
+def _section_nodes(soup, fragment: str):
+    """Elements belonging to the section whose heading has id=fragment, or None if not found."""
+    from urllib.parse import unquote
+
+    target = soup.find(id=fragment) or soup.find(id=unquote(fragment))
+    if target is None:
+        return None
+    heading = target if target.name in _HEADINGS else target.find_parent(_HEADINGS)
+    if heading is None:
+        # Not a heading (e.g. an anchored table/list) — use the element itself.
+        return [target]
+    level = int(heading.name[1])
+    # MediaWiki wraps headings in <div class="mw-heading">; siblings live next to the wrapper.
+    start = heading.parent if "mw-heading" in (heading.parent.get("class") or []) else heading
+    nodes = []
+    for sib in start.find_next_siblings():
+        h = sib if sib.name in _HEADINGS else (sib.find(_HEADINGS) if "mw-heading" in (sib.get("class") or []) else None)
+        if h is not None and int(h.name[1]) <= level:
+            break
+        nodes.append(sib)
+    return nodes
+
+
+def _render_node(node, lines: list[str]) -> None:
+    """Flatten HTML into text lines; table rows become `cell | cell | ...`."""
+    if getattr(node, "name", None) is None:
+        return
+    if node.name == "table":
+        for row in node.find_all("tr"):
+            cells = [c.get_text(" ", strip=True) for c in row.find_all(["th", "td"])]
+            if any(cells):
+                lines.append(" | ".join(cells))
+        return
+    if node.name in _HEADINGS:
+        lines.append(f"\n## {node.get_text(' ', strip=True)}")
+        return
+    if node.name in ("p", "li", "dd", "dt", "caption"):
+        lines.append(node.get_text(" ", strip=True))
+        return
+    children = [c for c in node.children if getattr(c, "name", None)]
+    if not children:
+        lines.append(node.get_text(" ", strip=True))
+        return
+    for child in children:
+        _render_node(child, lines)
 
 
 def _ingest_auto(url: str, work_dir: str) -> dict:

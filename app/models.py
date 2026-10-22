@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine,
+    Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine,
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
@@ -103,6 +103,29 @@ class Publish(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     job = relationship("Job", back_populates="publishes")
+
+
+class Schedule(Base):
+    """A source that is re-parsed on an interval; new titles are merged into its job."""
+    __tablename__ = "schedules"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200), default="")
+    source_url = Column(Text, nullable=False)
+    content_type = Column(String(30), default="auto")
+    interval_hours = Column(Integer, default=168)
+    enabled = Column(Boolean, default=True)
+    auto_approve = Column(Boolean, default=True)
+    publish_tmdb = Column(Boolean, default=False)
+    publish_radarr = Column(Boolean, default=False)
+    publish_kometa = Column(Boolean, default=False)
+    job_id = Column(String(16), default="")
+    last_run_at = Column(DateTime)
+    next_run_at = Column(DateTime, index=True)
+    last_status = Column(String(20), default="")  # queued | running | ok | error
+    last_message = Column(Text, default="")
+    last_added = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class KeyValue(Base):

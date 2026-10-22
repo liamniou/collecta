@@ -12,6 +12,9 @@
     header h1 { margin:0; font-size:28px; letter-spacing:.5px; font-weight:700; }
     header h1 span { color:var(--accent); }
     header p { color:var(--muted); margin:8px 0 0; font-size:14px; }
+    nav { display:flex; justify-content:center; gap:18px; margin-top:14px; font-size:14px; }
+    nav a { color:var(--muted); text-decoration:none; }
+    nav a.active, nav a:hover { color:var(--text); }
     main { max-width:640px; margin:0 auto; padding:0 20px 60px; }
     .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:24px; margin-top:20px; }
     label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
@@ -65,6 +68,7 @@
   <header>
     <h1>Collect<span>a</span></h1>
     <p>Paste a post, reel, or article link &mdash; get an approved movie list into TMDB, Radarr &amp; Kometa.</p>
+    <nav><a href="/" class="active">Analyze a link</a><a href="/schedules">Schedules</a></nav>
   </header>
   <main>
     <div class="card">

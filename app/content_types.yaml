@@ -6,6 +6,7 @@
 #   video  -> download media with yt-dlp, transcribe audio (whisper), read thumbnails
 #   images -> download post images (+caption), read posters/on-screen text via vision
 #   text   -> extract written text only (Reddit JSON/render, article scrape)
+#   list_page -> structured list/table page (Wikipedia etc.); a URL #fragment scopes to that section
 #
 # match:
 #   domains  -> substrings matched against the lowercased URL (host + path)
@@ -42,4 +43,12 @@ types:
     strategy: text
     match:
       domains: [t.me, telegram.me, medium.com, substack.com]
+      keywords: []
+
+  - id: web_list
+    label: Web list / table
+    description: Wikipedia & other list pages — extracts every film in the lists/tables. Add a #Section anchor to limit parsing to that section.
+    strategy: list_page
+    match:
+      domains: [wikipedia.org]
       keywords: []

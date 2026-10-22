@@ -26,13 +26,33 @@ _SYSTEM = (
 )
 
 
-def extract_titles(source_text: str, image_paths: list[str]) -> list[dict]:
+_LIST_SYSTEM = (
+    "You extract MOVIE titles from a structured list page (e.g. a Wikipedia list or "
+    "awards table). Return EVERY feature film that is an entry of the lists/tables in "
+    "the provided text — do not skip rows and do not stop early. Ignore people, countries, "
+    "TV series and films mentioned only in prose. Rows in tables may omit a repeated "
+    "first cell (e.g. the year) — inherit it from the row above. Use the English title "
+    "column when present, otherwise the original title. The year is the release or award "
+    "year shown in the row. Respond with a single JSON object of the form "
+    '{"movies": [{"title": "<title>", "year": <year or null>, "confidence": <0..1>}]}. '
+    'If there are no films, return {"movies": []}.'
+)
+_LIST_CHUNK_CHARS = 6000
+
+
+def extract_titles(source_text: str, image_paths: list[str], list_mode: bool = False) -> list[dict]:
     # Never call the model with no evidence — that is where hallucinated lists come from.
     if not (source_text or "").strip() and not image_paths:
         print("[extract] no text or images extracted; skipping LLM")
         return []
 
-    # The model caps images per request (gemini-3.7-flash = 10), so batch them.
+    if list_mode:
+        results = []
+        for chunk in _chunk_lines(source_text, _LIST_CHUNK_CHARS):
+            results.extend(_extract_list_chunk(chunk))
+        return _dedupe(results)
+
+    # The model caps images per request (gemini flash = 10), so batch them.
     batch = 6
     if not image_paths:
         results = _extract_once(source_text, [])
@@ -41,7 +61,10 @@ def extract_titles(source_text: str, image_paths: list[str]) -> list[dict]:
         for i in range(0, len(image_paths), batch):
             chunk = image_paths[i:i + batch]
             results.extend(_extract_once(source_text if i == 0 else "", chunk))
+    return _dedupe(results)
 
+
+def _dedupe(results: list[dict]) -> list[dict]:
     seen, out = set(), []
     for m in results:
         key = (m["title"].strip().lower(), m.get("year"))
@@ -50,6 +73,42 @@ def extract_titles(source_text: str, image_paths: list[str]) -> list[dict]:
         seen.add(key)
         out.append(m)
     return out
+
+
+def _chunk_lines(text: str, limit: int) -> list[str]:
+    """Split on line boundaries so long tables stay within the model's output budget."""
+    lines = (text or "").splitlines()
+    header = lines[0] if lines else ""
+    chunks, cur = [], []
+    size = 0
+    for ln in lines:
+        if cur and size + len(ln) > limit:
+            chunks.append("\n".join(cur))
+            # Repeat the page header and the previous line so carried-over cells (year) survive.
+            cur, size = [header, cur[-1]], len(header) + len(cur[-1])
+        cur.append(ln)
+        size += len(ln) + 1
+    if cur:
+        chunks.append("\n".join(cur))
+    return chunks
+
+
+def _extract_list_chunk(text: str) -> list[dict]:
+    try:
+        resp = _client.chat.completions.create(
+            model=config.LLM_MODEL,
+            messages=[
+                {"role": "system", "content": _LIST_SYSTEM},
+                {"role": "user", "content": f"List page content:\n---\n{text}"},
+            ],
+            temperature=0.0,
+            response_format={"type": "json_object"},
+        )
+        raw = resp.choices[0].message.content or "{}"
+    except Exception as exc:  # noqa: BLE001
+        print(f"[extract] list extraction failed: {exc}")
+        raw = "{}"
+    return _parse(raw)
 
 
 def _extract_once(source_text: str, image_paths: list[str]) -> list[dict]:

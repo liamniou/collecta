@@ -95,6 +95,7 @@
   <header>
     <h1><a href="/">Collect<span>a</span></a></h1>
     <div style="display:flex; gap:10px;">
+      <button class="action secondary" id="scheduleJob" style="display:none"></button>
       <button class="action secondary" id="rescanJob">Rescan</button>
       <button class="action secondary" id="removeJob">Remove job</button>
     </div>
@@ -169,6 +170,7 @@
       const r = await fetch('/api/jobs/' + JOB_ID);
       JOB = await r.json();
       if (document.activeElement !== $('listname')) $('listname').value = JOB.list_name || '';
+      renderScheduleButton();
       renderStatus();
       if (JOB.status === 'awaiting_approval' || JOB.status === 'done') {
         $('listnameRow').style.display = 'flex';
@@ -182,6 +184,20 @@
       if (JOB.status !== 'awaiting_approval' && JOB.status !== 'done' && JOB.status !== 'error') {
         setTimeout(poll, 2000);
       }
+    }
+
+    function renderScheduleButton() {
+      const btn = $('scheduleJob');
+      if (JOB.content_type === 'pasted_text') { btn.style.display = 'none'; return; }
+      const s = JOB.schedule;
+      const freq = s ? ({24:'daily', 168:'weekly', 720:'monthly'}[s.interval_hours] || 'every ' + s.interval_hours + 'h') : '';
+      btn.textContent = s ? ('\u21bb Re-parsed ' + freq + (s.enabled ? '' : ' (paused)')) : 'Schedule';
+      btn.title = s ? 'Manage schedule' : 'Re-parse this link on a schedule and add new titles automatically';
+      btn.onclick = () => {
+        location.href = s ? '/schedules' : '/schedules?' + new URLSearchParams({
+          url: JOB.source_url, type: JOB.content_type || 'auto', name: JOB.list_name || '' });
+      };
+      btn.style.display = '';
     }
 
     function renderStatus() {

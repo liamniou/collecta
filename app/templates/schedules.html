@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Collecta · Schedules</title>
+  <style>
+    :root { --bg:#0a0a0b; --panel:#111113; --card:#161619; --border:#26262b; --accent:#6366f1; --accent-hover:#818cf8;
+      --text:#f4f4f5; --muted:#8b8b94; --ok:#3fb950; --danger:#e5484d; --warn:#d29922; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:36px 20px 8px; text-align:center; }
+    header h1 { margin:0; font-size:28px; letter-spacing:.5px; font-weight:700; }
+    header h1 a { color:inherit; text-decoration:none; }
+    header h1 span { color:var(--accent); }
+    header p { color:var(--muted); margin:8px 0 0; font-size:14px; }
+    nav { display:flex; justify-content:center; gap:18px; margin-top:14px; font-size:14px; }
+    nav a { color:var(--muted); text-decoration:none; }
+    nav a.active, nav a:hover { color:var(--text); }
+    main { max-width:760px; margin:0 auto; padding:0 20px 60px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:24px; margin-top:20px; }
+    .card h2 { margin:0 0 16px; font-size:16px; }
+    label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
+    input[type=text], input[type=number], select { width:100%; padding:12px 14px; border-radius:8px; border:1px solid var(--border);
+      background:var(--panel); color:var(--text); font-size:15px; margin-bottom:16px; font-family:inherit; }
+    input:focus, select:focus { outline:none; border-color:#3a3a42; }
+    .row { display:flex; gap:12px; }
+    .row > div { flex:1; min-width:0; }
+    button { background:var(--accent); color:#fff; border:1px solid var(--accent); border-radius:8px; height:40px; padding:0 20px;
+      font-size:14px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; }
+    button:hover:not(:disabled) { background:var(--accent-hover); border-color:var(--accent-hover); }
+    button:disabled { opacity:.5; cursor:default; }
+    button.secondary { background:transparent; border:1px solid var(--border); color:var(--text); }
+    button.secondary:hover:not(:disabled) { background:rgba(255,255,255,.05); }
+    button.small { height:32px; padding:0 12px; font-size:13px; font-weight:500; }
+    button.danger { color:#e07a7d; }
+    button.danger:hover:not(:disabled) { background:rgba(229,72,77,.12); border-color:var(--danger); }
+    .muted { color:var(--muted); font-size:13px; }
+    .types { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
+    .type-pill { border:1px solid var(--border); background:var(--panel); color:var(--muted);
+      border-radius:8px; height:36px; padding:0 12px; font-size:13px; cursor:pointer; user-select:none; display:inline-flex; align-items:center; }
+    .type-pill:hover { border-color:#3a3a42; color:var(--text); }
+    .type-pill.active { border-color:var(--accent); background:rgba(99,102,241,.14); color:var(--text); }
+    .type-pill .sug { color:var(--accent); font-size:11px; margin-left:6px; }
+    .checks { display:grid; grid-template-columns:1fr 1fr; gap:10px 18px; margin-bottom:18px; }
+    .checks label { display:flex; gap:8px; align-items:flex-start; color:var(--text); font-size:14px; margin:0; cursor:pointer; }
+    .checks label small { display:block; color:var(--muted); font-size:12px; }
+    .checks input { margin-top:3px; accent-color:var(--accent); }
+    .go-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    #tmdbHint { margin:-6px 0 16px; }
+    a { color:#7aa2ff; }
+    .list h3 { font-size:12px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.7px; margin:28px 0 10px 4px; }
+    .sched { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-top:8px; }
+    .sched.paused { opacity:.6; }
+    .sched .top { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+    .sched .name { font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sched .name a { color:var(--text); text-decoration:none; }
+    .sched .name a:hover { text-decoration:underline; }
+    .sched .url { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sched .url a { color:var(--muted); }
+    .sched .meta { font-size:12px; color:var(--muted); margin-top:8px; display:flex; flex-wrap:wrap; gap:6px 14px; }
+    .sched .msg { font-size:12px; margin-top:6px; color:var(--muted); white-space:pre-wrap; word-break:break-word; }
+    .sched .msg.error { color:#e69090; }
+    .sched .actions { display:flex; gap:6px; flex-shrink:0; }
+    .pill { display:inline-block; font-size:11px; padding:2px 8px; border-radius:5px; background:#2a2f3a; color:#9aa4b2; }
+    .pill.ok { background:rgba(63,185,80,.15); color:var(--ok); }
+    .pill.error { background:rgba(229,72,77,.15); color:#e69090; }
+    .pill.running, .pill.queued { background:rgba(99,102,241,.18); color:#a5a8ff; }
+    .tag { font-size:11px; color:var(--muted); border:1px solid var(--border); border-radius:5px; padding:1px 6px; }
+    .empty { color:var(--muted); font-size:14px; text-align:center; padding:24px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><a href="/">Collect<span>a</span></a></h1>
+    <p>Re-parse a list on a schedule &mdash; new titles are added to the same list and synced automatically.</p>
+    <nav><a href="/">Analyze a link</a><a href="/schedules" class="active">Schedules</a></nav>
+  </header>
+  <main>
+    <div class="card">
+      <h2 id="formTitle">New scheduled parsing</h2>
+      <label for="url">Link (use a <code>#Section</code> anchor to parse only that section of a page)</label>
+      <input type="text" id="url" placeholder="https://en.wikipedia.org/wiki/Grand_Prix_(Cannes_Film_Festival)#Winners">
+      <label for="name">List name (optional &mdash; suggested from the page if empty)</label>
+      <input type="text" id="name" placeholder="Cannes Grand Prix Winners">
+      <label>Content type</label>
+      <div class="types" id="typeChooser"></div>
+      <div class="row">
+        <div>
+          <label for="freq">Frequency</label>
+          <select id="freq">
+            <option value="24">Daily</option>
+            <option value="168" selected>Weekly</option>
+            <option value="720">Monthly (30 days)</option>
+            <option value="custom">Custom…</option>
+          </select>
+        </div>
+        <div id="customWrap" style="display:none">
+          <label for="hours">Every N hours</label>
+          <input type="number" id="hours" min="1" max="8784" value="72">
+        </div>
+      </div>
+      <label>On each run</label>
+      <div class="checks">
+        <label><input type="checkbox" id="auto_approve" checked><span>Auto-approve new matches<small>Confident TMDB matches go straight into the list</small></span></label>
+        <label><input type="checkbox" id="publish_tmdb"><span>Sync TMDB list<small>Create / re-sync when new titles arrive</small></span></label>
+        <label><input type="checkbox" id="publish_radarr"><span>Add list to Radarr<small>Registers the TMDB list once (needs TMDB sync)</small></span></label>
+        <label><input type="checkbox" id="publish_kometa"><span>Update Kometa collection<small>Rewrites the collection when new titles arrive</small></span></label>
+        <label id="runNowWrap"><input type="checkbox" id="run_now" checked><span>Run the first parse now</span></label>
+      </div>
+      <div class="muted" id="tmdbHint" style="display:none"></div>
+      <div class="go-row">
+        <button id="save">Create schedule</button>
+        <button class="secondary" id="cancelEdit" style="display:none">Cancel</button>
+        <span class="muted" id="msg"></span>
+      </div>
+    </div>
+
+    <div class="list">
+      <h3>Scheduled parsings</h3>
+      <div id="list"><div class="empty">Loading…</div></div>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const FLAGS = ['auto_approve', 'publish_tmdb', 'publish_radarr', 'publish_kometa'];
+    let selectedType = 'auto', userPickedType = false, editingId = null, SCHEDULES = [], pollTimer;
+
+    function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+
+    async function loadTypes(url) {
+      const q = url ? ('?url=' + encodeURIComponent(url)) : '';
+      const d = await (await fetch('/api/content-types' + q)).json();
+      const suggested = d.suggested || 'auto';
+      if (!userPickedType) selectedType = suggested;
+      $('typeChooser').innerHTML = d.types.map(t => {
+        const active = t.id === selectedType ? ' active' : '';
+        const sug = (t.id === suggested && suggested !== 'auto') ? '<span class="sug">detected</span>' : '';
+        return '<div class="type-pill' + active + '" data-id="' + t.id + '" title="' + esc(t.description) + '">' + esc(t.label) + sug + '</div>';
+      }).join('');
+      $('typeChooser').querySelectorAll('.type-pill').forEach(p => p.onclick = () => {
+        userPickedType = true; selectedType = p.dataset.id;
+        $('typeChooser').querySelectorAll('.type-pill').forEach(x => x.classList.toggle('active', x === p));
+      });
+    }
+    let detectTimer;
+    $('url').addEventListener('input', () => {
+      clearTimeout(detectTimer);
+      detectTimer = setTimeout(() => loadTypes($('url').value.trim()), 350);
+    });
+
+    $('freq').onchange = () => { $('customWrap').style.display = $('freq').value === 'custom' ? 'block' : 'none'; };
+    // Radarr reads the TMDB list, so it implies TMDB sync.
+    $('publish_radarr').onchange = () => { if ($('publish_radarr').checked) $('publish_tmdb').checked = true; updateHint(); };
+    $('publish_tmdb').onchange = () => { if (!$('publish_tmdb').checked) $('publish_radarr').checked = false; updateHint(); };
+
+    let TMDB = { authed: true };
+    async function loadTmdb() { try { TMDB = await (await fetch('/api/tmdb/status')).json(); } catch (e) {} updateHint(); }
+    function updateHint() {
+      const show = $('publish_tmdb').checked && !TMDB.authed;
+      $('tmdbHint').style.display = show ? 'block' : 'none';
+      $('tmdbHint').innerHTML = 'TMDB account is not connected yet &mdash; connect it from any list page (Publish section) before the first sync.';
+    }
+
+    function intervalHours() {
+      return $('freq').value === 'custom' ? parseInt($('hours').value, 10) : parseInt($('freq').value, 10);
+    }
+
+    function resetForm() {
+      editingId = null; userPickedType = false;
+      $('formTitle').textContent = 'New scheduled parsing';
+      $('save').textContent = 'Create schedule';
+      $('cancelEdit').style.display = 'none';
+      $('runNowWrap').style.display = '';
+      $('url').value = ''; $('name').value = '';
+      $('freq').value = '168'; $('freq').onchange();
+      $('auto_approve').checked = true; $('run_now').checked = true;
+      ['publish_tmdb', 'publish_radarr', 'publish_kometa'].forEach(f => $(f).checked = false);
+      $('msg').textContent = '';
+      updateHint(); loadTypes();
+    }
+
+    function editSchedule(id) {
+      const s = SCHEDULES.find(x => x.id === id); if (!s) return;
+      editingId = id; userPickedType = true; selectedType = s.content_type;
+      $('formTitle').textContent = 'Edit scheduled parsing';
+      $('save').textContent = 'Save changes';
+      $('cancelEdit').style.display = '';
+      $('runNowWrap').style.display = 'none';
+      $('url').value = s.source_url; $('name').value = s.name;
+      const preset = ['24', '168', '720'].includes(String(s.interval_hours));
+      $('freq').value = preset ? String(s.interval_hours) : 'custom';
+      $('hours').value = s.interval_hours; $('freq').onchange();
+      FLAGS.forEach(f => $(f).checked = !!s[f]);
+      $('msg').textContent = '';
+      updateHint(); loadTypes(s.source_url);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    $('cancelEdit').onclick = resetForm;
+
+    $('save').onclick = async () => {
+      const url = $('url').value.trim();
+      if (!url) { $('msg').textContent = 'Enter a link first.'; return; }
+      const hours = intervalHours();
+      if (!hours || hours < 1) { $('msg').textContent = 'Enter a valid interval.'; return; }
+      const body = { url, name: $('name').value.trim(), content_type: selectedType, interval_hours: hours };
+      FLAGS.forEach(f => body[f] = $(f).checked);
+      if (!editingId) body.run_now = $('run_now').checked;
+      $('save').disabled = true; $('msg').textContent = 'Saving…';
+      try {
+        const r = await fetch(editingId ? '/api/schedules/' + editingId : '/api/schedules', {
+          method: editingId ? 'PATCH' : 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+        });
+        const d = await r.json();
+        if (!r.ok) { $('msg').textContent = d.error || 'Failed.'; }
+        else { resetForm(); $('msg').textContent = 'Saved.'; loadList(); }
+      } catch (e) { $('msg').textContent = 'Request failed.'; }
+      $('save').disabled = false;
+    };
+
+    function freqLabel(h) {
+      if (h === 24) return 'Daily';
+      if (h === 168) return 'Weekly';
+      if (h === 720) return 'Monthly';
+      if (h % 24 === 0) return 'Every ' + (h / 24) + ' days';
+      return 'Every ' + h + 'h';
+    }
+    function rel(iso) {
+      if (!iso) return '—';
+      const diff = (new Date(iso) - Date.now()) / 1000, a = Math.abs(diff);
+      const txt = a < 60 ? 'moments' : a < 3600 ? Math.round(a/60) + ' min' : a < 86400 ? Math.round(a/3600) + ' h' : Math.round(a/86400) + ' d';
+      return diff >= 0 ? 'in ' + txt : txt + ' ago';
+    }
+    const STATUS = { ok:'ok', error:'error', running:'running…', queued:'queued' };
+
+    function render() {
+      if (!SCHEDULES.length) { $('list').innerHTML = '<div class="empty">No scheduled parsings yet.</div>'; return; }
+      $('list').innerHTML = SCHEDULES.map(s => {
+        const name = s.name || s.list_name || s.source_url;
+        const nameHtml = s.job_id ? '<a href="/job/' + s.job_id + '">' + esc(name) + '</a>' : esc(name);
+        const active = s.last_status === 'running' || s.last_status === 'queued';
+        const st = s.last_status ? '<span class="pill ' + esc(s.last_status) + '">' + esc(STATUS[s.last_status] || s.last_status) + '</span>' : '<span class="pill">never run</span>';
+        const tags = [s.auto_approve && 'auto-approve', s.publish_tmdb && 'TMDB', s.publish_radarr && 'Radarr', s.publish_kometa && 'Kometa']
+          .filter(Boolean).map(t => '<span class="tag">' + t + '</span>').join(' ');
+        return '<div class="sched' + (s.enabled ? '' : ' paused') + '">' +
+          '<div class="top"><div style="min-width:0">' +
+            '<div class="name">' + nameHtml + '</div>' +
+            '<div class="url"><a href="' + esc(s.source_url) + '" target="_blank" rel="noopener">' + esc(s.source_url) + '</a></div></div>' +
+            '<div class="actions">' +
+              '<button class="secondary small" data-act="run" data-id="' + s.id + '"' + (active ? ' disabled' : '') + '>Run now</button>' +
+              '<button class="secondary small" data-act="toggle" data-id="' + s.id + '">' + (s.enabled ? 'Pause' : 'Resume') + '</button>' +
+              '<button class="secondary small" data-act="edit" data-id="' + s.id + '">Edit</button>' +
+              '<button class="secondary small danger" data-act="del" data-id="' + s.id + '" title="Delete schedule (the list is kept)">✕</button>' +
+            '</div></div>' +
+          '<div class="meta">' + st +
+            '<span>' + freqLabel(s.interval_hours) + (s.enabled ? '' : ' · paused') + '</span>' +
+            '<span>Last run: ' + rel(s.last_run_at) + '</span>' +
+            '<span>Next: ' + (s.enabled ? rel(s.next_run_at) : '—') + '</span>' +
+            '<span>' + s.count + ' titles · ' + s.approved + ' approved' + (s.review ? ' · ' + s.review + ' to review' : '') + '</span>' +
+            (tags ? '<span>' + tags + '</span>' : '') +
+          '</div>' +
+          (s.last_message ? '<div class="msg' + (s.last_status === 'error' ? ' error' : '') + '">' + esc(s.last_message) + '</div>' : '') +
+        '</div>';
+      }).join('');
+      $('list').querySelectorAll('button[data-act]').forEach(b => b.onclick = () => act(b.dataset.act, parseInt(b.dataset.id, 10), b));
+    }
+
+    async function act(action, id, btn) {
+      const s = SCHEDULES.find(x => x.id === id);
+      if (action === 'edit') return editSchedule(id);
+      if (action === 'del' && !confirm('Delete this schedule? The collected list is kept.')) return;
+      btn.disabled = true;
+      const req = {
+        run: ['/api/schedules/' + id + '/run', { method: 'POST' }],
+        toggle: ['/api/schedules/' + id, { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enabled: !s.enabled }) }],
+        del: ['/api/schedules/' + id, { method: 'DELETE' }],
+      }[action];
+      try {
+        const r = await fetch(...req);
+        if (!r.ok) alert((await r.json()).error || 'Failed.');
+      } catch (e) { alert('Request failed.'); }
+      if (action === 'del' && editingId === id) resetForm();
+      loadList();
+    }
+
+    async function loadList() {
+      clearTimeout(pollTimer);
+      try {
+        SCHEDULES = (await (await fetch('/api/schedules')).json()).schedules || [];
+        render();
+      } catch (e) { /* ignore */ }
+      const busy = SCHEDULES.some(s => s.last_status === 'running' || s.last_status === 'queued');
+      pollTimer = setTimeout(loadList, busy ? 3000 : 30000);
+    }
+
+    resetForm();
+    const qs = new URLSearchParams(location.search);
+    if (qs.get('url')) {
+      $('url').value = qs.get('url');
+      $('name').value = qs.get('name') || '';
+      if (qs.get('type') && qs.get('type') !== 'pasted_text') { selectedType = qs.get('type'); userPickedType = selectedType !== 'auto'; }
+      loadTypes(qs.get('url'));
+    }
+    loadTmdb();
+    loadList();
+  </script>
+</body>
+</html>

@@ -66,6 +66,8 @@ single-user home use — no Redis/Celery. Job status polled by the UI (`GET /job
 | Images in post | download via yt-dlp/gallery-dl; optional TMDB match by vision LLM/OCR |
 | Video audio | extract audio (ffmpeg via yt-dlp `-x`), transcribe. **STT options** (see §7) |
 
+| List page (Wikipedia etc., `web_list` type) | HTML fetch (Camoufox fallback); a URL `#fragment` scopes parsing to that heading's section; tables are flattened to `cell \| cell` rows |
+
 Output = one consolidated `source_text` blob + list of downloaded media paths.
 
 ### 3b. Title extraction (LLM)
@@ -75,6 +77,8 @@ Prompt the LLM (copilot-api, OpenAI-compatible) to return **strict JSON**:
 ```
 System prompt constrains it to *movies only* and to prefer canonical English titles.
 `response_format: {"type":"json_object"}` where supported; otherwise parse defensively.
+List pages use a separate "extract every row" prompt and are chunked (~6k chars) so long
+tables are not truncated by the model's output budget.
 
 ### 3c. Matching (TMDB)
 For each candidate: `GET /3/search/movie?query=&year=` → take best hit → store
@@ -120,6 +124,9 @@ Candidate(id, job_id, raw_title, year_hint, confidence)          # LLM output
 Match(id, candidate_id, tmdb_id, title, year, poster_path,
       overview, state[approved|review|rejected], alternates_json)
 Publish(id, job_id, target[punchplay|radarr|kometa], status, detail, created_at)
+Schedule(id, name, source_url, content_type, interval_hours, enabled, auto_approve,
+         publish_tmdb, publish_radarr, publish_kometa, job_id, last_run_at,
+         next_run_at, last_status, last_message, last_added)
 ```
 
 `status` values: `queued → ingesting → extracting → matching → awaiting_approval →
@@ -144,6 +151,24 @@ static SPA):
 - PunchPlay device auth: `POST /api/punchplay/device`, `POST /api/punchplay/device/poll`
 
 ---
+
+## 6b. Scheduled parsings
+
+UI at `/schedules` (also reachable via the **Schedule** button on a list page). A schedule
+re-parses a source every `interval_hours` (daily / weekly / monthly / custom) into **one
+persistent job**, so the list grows over time instead of being recreated:
+
+- A scheduler thread checks every `SCHEDULER_TICK_SECONDS` (default 60) for due, enabled
+  schedules and puts them on the same worker queue as one-off jobs.
+- Each run ingests → extracts → matches, then **merges**: raw titles seen in earlier runs are
+  skipped (so rejections and manual swaps stick) and TMDB ids already in the list are deduped.
+- New matches are auto-approved (confidence ≥ 0.6) when `auto_approve` is on, else left for review.
+- Optional auto-publish: TMDB list re-sync and Kometa collection rewrite when new approved
+  titles arrive (or the target never succeeded); Radarr list registered once (it re-reads the TMDB list).
+- Runs queued/running during a restart are reset and retried on the next tick.
+
+API: `GET/POST /api/schedules`, `PATCH/DELETE /api/schedules/<id>`, `POST /api/schedules/<id>/run`.
+Example: `https://en.wikipedia.org/wiki/Grand_Prix_(Cannes_Film_Festival)#Winners` weekly.
 
 ## 7. Speech-to-text options (pick at build)
 1. **whisper.cpp** — repo already has `whisper.cpp/` and a `whisper-asr` volume. Reuse a
@@ -189,7 +214,7 @@ services:
 ## 10. Resolved decisions (built)
 1. **Networking**: host LAN IP `192.168.0.237` for copilot-api (`:4141`), radarr (`:7878`),
    whisper-asr (`:9000`). No shared docker network needed.
-2. **LLM model**: `gemini-3.7-flash` via copilot-api (confirmed served + multimodal).
+2. **LLM model**: `gemini-3.8-flash` via copilot-api (multimodal; `gemini-3.7-flash` was retired by the proxy).
 3. **PunchPlay OAuth**: device-code flow (UI shows code + verification URL, polls for token).
 4. **STT**: reuse local whisper-asr (`onerahmet/openai-whisper-asr-webservice`, `POST /asr`).
 5. **Radarr**: quality profile `2160p Balanced` (resolved by name), root `/media/Movies`,
