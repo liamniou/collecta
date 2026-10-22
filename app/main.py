@@ -63,8 +63,24 @@ def _fail(job_id: str, message: str) -> None:
     with get_session() as session:
         job = session.get(Job, job_id)
         if job:
-            job.status = models.ERROR
             job.error = message
+            if job.matches:
+                # A failed rescan must not hide a list that already has titles.
+                job.status = AWAITING_APPROVAL
+                job.stage = "Last rescan failed"
+            else:
+                job.status = models.ERROR
+
+
+_ACTIVE_JOB = (models.QUEUED, INGESTING, EXTRACTING, MATCHING)
+_job_locks: dict[str, threading.Lock] = {}
+_job_locks_guard = threading.Lock()
+
+
+def _job_lock(job_id: str) -> threading.Lock:
+    """Serializes publishes per list so concurrent clicks/schedules can't create duplicate TMDB lists."""
+    with _job_locks_guard:
+        return _job_locks.setdefault(job_id, threading.Lock())
 
 
 def _process_job(job_id: str) -> None:
@@ -293,7 +309,7 @@ def _approved_movies(session, job_id: str) -> list[dict]:
     ]
 
 
-def _do_publish_tmdb(job_id: str) -> tuple[str, str]:
+def _do_publish_tmdb_unlocked(job_id: str) -> tuple[str, str]:
     """Returns (status, detail): status is ok | error | skip (nothing recorded on skip)."""
     with get_session() as session:
         movies = _approved_movies(session, job_id)
@@ -317,7 +333,7 @@ def _do_publish_tmdb(job_id: str) -> tuple[str, str]:
     return status, detail
 
 
-def _do_publish_radarr(job_id: str) -> tuple[str, str]:
+def _do_publish_radarr_unlocked(job_id: str) -> tuple[str, str]:
     with get_session() as session:
         job = session.get(Job, job_id)
         list_name = job.list_name if job else "Collecta list"
@@ -334,7 +350,7 @@ def _do_publish_radarr(job_id: str) -> tuple[str, str]:
     return status, detail
 
 
-def _do_publish_kometa(job_id: str) -> tuple[str, str]:
+def _do_publish_kometa_unlocked(job_id: str) -> tuple[str, str]:
     with get_session() as session:
         movies = _approved_movies(session, job_id)
         job = session.get(Job, job_id)
@@ -352,6 +368,21 @@ def _do_publish_kometa(job_id: str) -> tuple[str, str]:
     with get_session() as session:
         _record_publish(session, job_id, "kometa", status, detail)
     return status, detail
+
+
+def _do_publish_tmdb(job_id: str) -> tuple[str, str]:
+    with _job_lock(job_id):
+        return _do_publish_tmdb_unlocked(job_id)
+
+
+def _do_publish_radarr(job_id: str) -> tuple[str, str]:
+    with _job_lock(job_id):
+        return _do_publish_radarr_unlocked(job_id)
+
+
+def _do_publish_kometa(job_id: str) -> tuple[str, str]:
+    with _job_lock(job_id):
+        return _do_publish_kometa_unlocked(job_id)
 
 
 _PUBLISHERS = {"tmdb": _do_publish_tmdb, "radarr": _do_publish_radarr, "kometa": _do_publish_kometa}
@@ -451,14 +482,49 @@ def create_job():
         if existing and not force:
             return jsonify({"id": job_id, "cached": True})
         if existing:
-            # Force rescan: drop the old result and reprocess in place.
-            session.delete(existing)
-            session.flush()
-        session.add(Job(id=job_id, source_url=url, list_name=list_name,
-                        content_type=content_type, status=models.QUEUED))
+            # Rescan merges new titles into the list; approvals, TMDB list and publishes are kept.
+            if existing.status in _ACTIVE_JOB:
+                return jsonify({"id": job_id, "error": "This list is already being parsed."}), 409
+            existing.status, existing.stage, existing.error = models.QUEUED, "", ""
+        else:
+            session.add(Job(id=job_id, source_url=url, list_name=list_name,
+                            content_type=content_type, status=models.QUEUED))
     shutil.rmtree(os.path.join(config.JOBS_DIR, job_id), ignore_errors=True)
     _job_queue.put(("job", job_id))
     return jsonify({"id": job_id})
+
+
+@app.route("/api/jobs")
+def all_jobs():
+    with get_session() as session:
+        schedules = {s.job_id: s for s in session.query(Schedule).all() if s.job_id}
+        out = []
+        for j in session.query(Job).order_by(Job.created_at.desc()).all():
+            s = schedules.get(j.id)
+            out.append({
+                "id": j.id,
+                "source_url": j.source_url if j.content_type != "pasted_text" else "",
+                "list_name": j.list_name,
+                "status": j.status,
+                "content_type": j.content_type or "auto",
+                "count": len(j.matches),
+                "approved": sum(1 for m in j.matches if m.state == APPROVED),
+                "unmatched": sum(1 for m in j.matches if not m.tmdb_id and m.state != REJECTED),
+                "published": sorted({p.target for p in j.publishes if p.status == "ok"}),
+                "tmdb_list_id": j.tmdb_list_id or "",
+                "created_at": _iso(j.created_at),
+                "schedulable": (j.content_type or "auto") != "pasted_text",
+                "schedule": {
+                    "id": s.id, "interval_hours": s.interval_hours, "enabled": bool(s.enabled),
+                    "next_run_at": _iso(s.next_run_at), "last_status": s.last_status or "",
+                } if s else None,
+            })
+        return jsonify({"jobs": out})
+
+
+@app.route("/lists")
+def lists_page():
+    return render_template("lists.html")
 
 
 @app.route("/api/jobs/recent")
@@ -494,6 +560,8 @@ def delete_job(job_id: str):
         job = session.get(Job, job_id)
         if not job:
             return jsonify({"error": "not found"}), 404
+        # Otherwise the next scheduled run would silently recreate the list.
+        session.query(Schedule).filter_by(job_id=job_id).delete()
         session.delete(job)  # cascades to candidates/matches/publishes
     return jsonify({"ok": True})
 
@@ -717,18 +785,32 @@ def list_schedules():
 @app.route("/api/schedules", methods=["POST"])
 def create_schedule():
     data = request.get_json(force=True) or {}
-    if not (data.get("url") or "").strip():
-        return jsonify({"error": "url is required"}), 400
+    job_id = (data.get("job_id") or "").strip()
+    if not job_id and not (data.get("url") or "").strip():
+        return jsonify({"error": "url or job_id is required"}), 400
     data.setdefault("interval_hours", 168)
     run_now = data.get("run_now", True)
     with get_session() as session:
         s = Schedule(source_url="", content_type="", enabled=True, auto_approve=True)
+        if job_id:
+            # Schedule an existing list: its source is fixed, new titles merge into it.
+            job = session.get(Job, job_id)
+            if not job:
+                return jsonify({"error": "list not found"}), 404
+            if (job.content_type or "auto") == "pasted_text":
+                return jsonify({"error": "Pasted text has no link to re-fetch."}), 400
+            data = {k: v for k, v in data.items() if k not in ("url", "content_type")}
+            s.source_url, s.content_type = job.source_url, job.content_type or "auto"
+            data.setdefault("name", job.list_name or "")
         err = _apply_schedule_fields(s, data)
         if err:
             return jsonify({"error": err}), 400
+        s.job_id = job_id or models.job_id_for_url(s.source_url, s.content_type)
+        dup = session.query(Schedule).filter_by(job_id=s.job_id).first()
+        if dup:
+            return jsonify({"error": "This list already has a schedule.", "schedule_id": dup.id}), 409
         now = datetime.utcnow()
         s.next_run_at = now if run_now else now + timedelta(hours=s.interval_hours)
-        s.job_id = models.job_id_for_url(s.source_url, s.content_type)
         session.add(s)
         session.flush()
         sid = s.id
@@ -750,7 +832,11 @@ def update_schedule(schedule_id: int):
             return jsonify({"error": err}), 400
         if (s.source_url, s.content_type) != old_key:
             # A different source means a different list; start it fresh on the next tick.
-            s.job_id = models.job_id_for_url(s.source_url, s.content_type)
+            new_job_id = models.job_id_for_url(s.source_url, s.content_type)
+            if session.query(Schedule).filter(Schedule.job_id == new_job_id, Schedule.id != s.id).first():
+                session.rollback()
+                return jsonify({"error": "Another schedule already parses this link."}), 409
+            s.job_id = new_job_id
             s.next_run_at = datetime.utcnow()
         session.flush()
         return jsonify(_schedule_dict(session, s))

@@ -157,6 +157,7 @@
 
   <script>
     const JOB_ID = "{{ job_id }}";
+    const esc = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
     const RADARR_WEB = "{{ radarr_web_url }}";
     const $ = (id) => document.getElementById(id);
     let JOB = null;
@@ -194,8 +195,7 @@
       btn.textContent = s ? ('\u21bb Re-parsed ' + freq + (s.enabled ? '' : ' (paused)')) : 'Schedule';
       btn.title = s ? 'Manage schedule' : 'Re-parse this link on a schedule and add new titles automatically';
       btn.onclick = () => {
-        location.href = s ? '/schedules' : '/schedules?' + new URLSearchParams({
-          url: JOB.source_url, type: JOB.content_type || 'auto', name: JOB.list_name || '' });
+        location.href = s ? '/schedules#s-' + s.id : '/schedules?job_id=' + encodeURIComponent(JOB_ID);
       };
       btn.style.display = '';
     }
@@ -210,8 +210,10 @@
 
       if (inReview) {
         // No status bar during review — just the counter next to "Approve matches".
-        $('status').style.display = total ? 'none' : 'block';
-        if (!total) $('status').innerHTML = '<span class="muted">No movies were found in this post. Try adding some manually below.</span>';
+        $('status').style.display = (total && !JOB.error) ? 'none' : 'block';
+        if (JOB.error) $('status').innerHTML = '<span>' + esc(JOB.stage || 'Last rescan failed') + ' — the list below is unchanged.</span>' +
+          '<pre style="color:#e69090;white-space:pre-wrap">' + esc(JOB.error) + '</pre>';
+        else if (!total) $('status').innerHTML = '<span class="muted">No movies were found in this post. Try adding some manually below.</span>';
         $('approvedCounter').textContent = total ? (approved + '/' + total + ' approved') : '';
         return;
       }
@@ -488,14 +490,15 @@
 
     $('rescanJob').onclick = async () => {
       if (!JOB || !JOB.source_url) return;
+      if (!confirm('Rescan the source? New titles are added to this list; your approvals are kept.')) return;
       $('rescanJob').disabled = true; $('rescanJob').textContent = 'Rescanning…';
       const r = await fetch('/api/jobs', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ url: JOB.source_url, content_type: JOB.content_type || 'auto', force: true })
       });
       const d = await r.json();
-      if (d.id) location.href = '/job/' + d.id;
-      else { $('rescanJob').disabled = false; $('rescanJob').textContent = 'Rescan'; }
+      if (r.ok && d.id) location.href = '/job/' + d.id;
+      else { alert(d.error || 'Rescan failed.'); $('rescanJob').disabled = false; $('rescanJob').textContent = 'Rescan'; }
     };
 
     refreshTMDB();

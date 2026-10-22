@@ -208,7 +208,7 @@ def add_tmdb_list(list_id: str, list_name: str) -> str:
             f"{config.RADARR_URL}/api/v3/importlist",
             json=payload, headers=_headers(), timeout=30,
         )
-    if resp.status_code not in (200, 201):
+    if resp.status_code not in (200, 201, 202):  # PUT on an existing list returns 202
         raise RuntimeError(f"Radarr import list failed: {resp.status_code} {resp.text[:200]}")
 
     # Pull the list now so Radarr adds/searches the movies immediately.

@@ -68,17 +68,23 @@
     .pill.running, .pill.queued { background:rgba(99,102,241,.18); color:#a5a8ff; }
     .tag { font-size:11px; color:var(--muted); border:1px solid var(--border); border-radius:5px; padding:1px 6px; }
     .empty { color:var(--muted); font-size:14px; text-align:center; padding:24px; }
+    .sched.highlight { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+    .existing { background:rgba(99,102,241,.10); border:1px solid rgba(99,102,241,.35); border-radius:8px; padding:10px 14px;
+      font-size:13px; margin-bottom:16px; }
+    input:disabled { opacity:.6; }
+    .types.locked { pointer-events:none; opacity:.6; }
   </style>
 </head>
 <body>
   <header>
     <h1><a href="/">Collect<span>a</span></a></h1>
     <p>Re-parse a list on a schedule &mdash; new titles are added to the same list and synced automatically.</p>
-    <nav><a href="/">Analyze a link</a><a href="/schedules" class="active">Schedules</a></nav>
+    <nav><a href="/">Analyze a link</a><a href="/lists">Lists</a><a href="/schedules" class="active">Schedules</a></nav>
   </header>
   <main>
     <div class="card">
       <h2 id="formTitle">New scheduled parsing</h2>
+      <div class="existing" id="existingNote" style="display:none"></div>
       <label for="url">Link (use a <code>#Section</code> anchor to parse only that section of a page)</label>
       <input type="text" id="url" placeholder="https://en.wikipedia.org/wiki/Grand_Prix_(Cannes_Film_Festival)#Winners">
       <label for="name">List name (optional &mdash; suggested from the page if empty)</label>
@@ -126,6 +132,7 @@
     const $ = (id) => document.getElementById(id);
     const FLAGS = ['auto_approve', 'publish_tmdb', 'publish_radarr', 'publish_kometa'];
     let selectedType = 'auto', userPickedType = false, editingId = null, SCHEDULES = [], pollTimer;
+    let existingJob = null; // list being scheduled (source is fixed, titles merge into it)
 
     function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
 
@@ -167,8 +174,19 @@
       return $('freq').value === 'custom' ? parseInt($('hours').value, 10) : parseInt($('freq').value, 10);
     }
 
+    function setExisting(job) {
+      existingJob = job;
+      $('existingNote').style.display = job ? 'block' : 'none';
+      $('existingNote').innerHTML = job ? 'Scheduling the existing list <a href="/job/' + esc(job.id) + '">' + esc(job.list_name || job.source_url) +
+        '</a> (' + job.matches.length + ' titles). New titles are added to it; its TMDB list, Radarr and Kometa links are kept.' : '';
+      $('url').disabled = !!job;
+      $('typeChooser').classList.toggle('locked', !!job);
+    }
+
     function resetForm() {
       editingId = null; userPickedType = false;
+      setExisting(null);
+      if (location.search) history.replaceState(null, '', '/schedules' + location.hash);
       $('formTitle').textContent = 'New scheduled parsing';
       $('save').textContent = 'Create schedule';
       $('cancelEdit').style.display = 'none';
@@ -207,13 +225,17 @@
       const body = { url, name: $('name').value.trim(), content_type: selectedType, interval_hours: hours };
       FLAGS.forEach(f => body[f] = $(f).checked);
       if (!editingId) body.run_now = $('run_now').checked;
+      if (existingJob && !editingId) { body.job_id = existingJob.id; delete body.url; delete body.content_type; }
       $('save').disabled = true; $('msg').textContent = 'Saving…';
       try {
         const r = await fetch(editingId ? '/api/schedules/' + editingId : '/api/schedules', {
           method: editingId ? 'PATCH' : 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
         });
         const d = await r.json();
-        if (!r.ok) { $('msg').textContent = d.error || 'Failed.'; }
+        if (!r.ok) {
+          $('msg').textContent = d.error || 'Failed.';
+          if (d.schedule_id) { $('msg').innerHTML = esc(d.error) + ' <a href="#s-' + d.schedule_id + '">Show it</a>'; }
+        }
         else { resetForm(); $('msg').textContent = 'Saved.'; loadList(); }
       } catch (e) { $('msg').textContent = 'Request failed.'; }
       $('save').disabled = false;
@@ -243,7 +265,8 @@
         const st = s.last_status ? '<span class="pill ' + esc(s.last_status) + '">' + esc(STATUS[s.last_status] || s.last_status) + '</span>' : '<span class="pill">never run</span>';
         const tags = [s.auto_approve && 'auto-approve', s.publish_tmdb && 'TMDB', s.publish_radarr && 'Radarr', s.publish_kometa && 'Kometa']
           .filter(Boolean).map(t => '<span class="tag">' + t + '</span>').join(' ');
-        return '<div class="sched' + (s.enabled ? '' : ' paused') + '">' +
+        const hl = location.hash === '#s-' + s.id ? ' highlight' : '';
+        return '<div class="sched' + (s.enabled ? '' : ' paused') + hl + '" id="s-' + s.id + '">' +
           '<div class="top"><div style="min-width:0">' +
             '<div class="name">' + nameHtml + '</div>' +
             '<div class="url"><a href="' + esc(s.source_url) + '" target="_blank" rel="noopener">' + esc(s.source_url) + '</a></div></div>' +
@@ -289,14 +312,28 @@
       try {
         SCHEDULES = (await (await fetch('/api/schedules')).json()).schedules || [];
         render();
+        if (!loadList.scrolled && location.hash.startsWith('#s-') && $(location.hash.slice(1))) {
+          loadList.scrolled = true; $(location.hash.slice(1)).scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
       } catch (e) { /* ignore */ }
       const busy = SCHEDULES.some(s => s.last_status === 'running' || s.last_status === 'queued');
       pollTimer = setTimeout(loadList, busy ? 3000 : 30000);
     }
 
-    resetForm();
     const qs = new URLSearchParams(location.search);
-    if (qs.get('url')) {
+    resetForm();
+    if (qs.get('job_id')) {
+      fetch('/api/jobs/' + encodeURIComponent(qs.get('job_id'))).then(r => r.json()).then(job => {
+        if (!job.id) { $('msg').textContent = 'List not found.'; return; }
+        $('url').value = job.source_url; $('name').value = job.list_name || '';
+        selectedType = job.content_type || 'auto'; userPickedType = true;
+        // Pre-tick the targets this list was already published to.
+        const done = new Set((job.publishes || []).filter(p => p.status === 'ok').map(p => p.target));
+        $('publish_tmdb').checked = done.has('tmdb'); $('publish_radarr').checked = done.has('radarr');
+        $('publish_kometa').checked = done.has('kometa');
+        setExisting(job); updateHint(); loadTypes(job.source_url);
+      });
+    } else if (qs.get('url')) {
       $('url').value = qs.get('url');
       $('name').value = qs.get('name') || '';
       if (qs.get('type') && qs.get('type') !== 'pasted_text') { selectedType = qs.get('type'); userPickedType = selectedType !== 'auto'; }

@@ -171,6 +171,14 @@ API: `GET/POST /api/schedules`, `PATCH/DELETE /api/schedules/<id>`, `POST /api/s
 Example: `https://en.wikipedia.org/wiki/Grand_Prix_(Cannes_Film_Festival)#Winners` weekly.
 A scheduled run that extracts zero titles is recorded as an error (broken page/parser/LLM).
 
+Every job (list) is persisted in SQLite and listed at `/lists` (`GET /api/jobs`). Any link-based
+list can be scheduled from there or from its page (`POST /api/schedules {"job_id": ...}`); the
+schedule then merges into that list, keeping its TMDB list, Radarr import list and Kometa file.
+One schedule per list; pasted-text lists can't be scheduled. **Rescan** also merges (approvals,
+rejections and publish links are kept) instead of recreating the list, and a failed rescan
+leaves the existing titles visible. Publishes are serialized per list so concurrent clicks and
+scheduled runs can't create duplicate TMDB lists. Deleting a list also deletes its schedule.
+
 ## 6c. Monitoring
 
 `GET /metrics` (Prometheus format), scraped by Alloy (`job="collecta"`, `192.168.0.237:5053`).
