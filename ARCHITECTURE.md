@@ -169,6 +169,21 @@ persistent job**, so the list grows over time instead of being recreated:
 
 API: `GET/POST /api/schedules`, `PATCH/DELETE /api/schedules/<id>`, `POST /api/schedules/<id>/run`.
 Example: `https://en.wikipedia.org/wiki/Grand_Prix_(Cannes_Film_Festival)#Winners` weekly.
+A scheduled run that extracts zero titles is recorded as an error (broken page/parser/LLM).
+
+## 6c. Monitoring
+
+`GET /metrics` (Prometheus format), scraped by Alloy (`job="collecta"`, `192.168.0.237:5053`).
+- Counters: `collecta_parse_runs_total{kind,outcome}` (ok/no_text/no_titles/error),
+  `collecta_titles_total{kind,result}` (matched/unmatched), `collecta_llm_requests_total{op,result}`,
+  `collecta_tmdb_requests_total{result}`, `collecta_publish_total{target,result}`,
+  `collecta_schedule_runs_total{status}`; histogram `collecta_stage_duration_seconds{stage}`.
+- Gauges read from SQLite on each scrape (restart-safe), labelled `schedule`/`name`:
+  `collecta_schedule_{enabled,running,last_run_success,last_run_timestamp_seconds,
+  next_run_timestamp_seconds,interval_seconds,last_extracted_titles,known_titles,last_new_titles}`,
+  `collecta_schedule_titles{state=approved|review|rejected|unmatched}`, plus `collecta_jobs{status}`
+  and `collecta_queue_depth`.
+- Alert rules live in `_volumes/prometheus/configs/collecta.yml` (Alertmanager → Discord).
 
 ## 7. Speech-to-text options (pick at build)
 1. **whisper.cpp** — repo already has `whisper.cpp/` and a `whisper-asr` volume. Reuse a
