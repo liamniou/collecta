@@ -8,9 +8,11 @@
 <style>
   tr.highlight td { background:color-mix(in srgb, var(--info) 8%, transparent); }
   tr.paused td:not(:last-child) { opacity:.55; }
-  #list .cell-main, #list .cell-sub { max-width:min(420px, 32vw); }
+  /* List column takes all spare width; contents ellipsize only when space actually runs out. */
+  #list td.list-cell { width:100%; max-width:0; }
+  #list .cell-main, #list .cell-sub { max-width:none; }
   @media (max-width: 1400px) { .hide-md { display:none; } }
-  .msg-line { font-size:12.5px; color:var(--muted-foreground); margin-top:3px; max-width:min(420px, 32vw); white-space:normal;
+  .msg-line { font-size:12.5px; color:var(--muted-foreground); margin-top:3px; white-space:normal;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   .msg-line.error { color:var(--destructive); }
   .checks { display:grid; grid-template-columns:1fr 1fr; gap:14px 20px; }
@@ -315,7 +317,7 @@
       const dotState = s.enabled ? (s.last_status || 'never') : 'paused';
       const hl = location.hash === '#s-' + s.id ? ' highlight' : '';
       return '<tr id="s-' + s.id + '" class="' + (s.enabled ? '' : 'paused') + hl + '">' +
-        '<td>' + nameHtml +
+        '<td class="list-cell">' + nameHtml +
           '<a class="cell-sub" href="' + esc(s.source_url) + '" target="_blank" rel="noopener">' + esc(s.source_url) + '</a>' +
           (s.last_message ? '<div class="msg-line' + (s.last_status === 'error' ? ' error' : '') + '" title="' + esc(s.last_message) + '">Last run: ' + esc(s.last_message) + '</div>' : '') +
         '</td>' +
