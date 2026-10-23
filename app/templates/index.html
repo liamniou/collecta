@@ -133,12 +133,10 @@
           '<td class="shrink"><span class="badge ' + kind + '">' + esc(label) + '</span></td>' +
           '<td class="num shrink hide-sm">' + j.count + ' movies</td>' +
           '<td class="shrink"><div class="row-actions">' +
-            '<button class="btn ghost sm icon-only run" data-id="' + j.id + '" title="Run Kometa for this collection">' + ICON('zap', 15) + '</button>' +
             '<button class="btn danger-ghost sm icon-only del" data-id="' + j.id + '" title="Remove list">' + ICON('trash', 15) + '</button>' +
           '</div></td></tr>';
       }).join('');
       document.querySelectorAll('#recentList .del').forEach(b => b.onclick = () => removeJob(b.dataset.id));
-      document.querySelectorAll('#recentList .run').forEach(b => b.onclick = () => runKometa(b));
       $('recent').hidden = false;
     } catch (e) { /* ignore */ }
   }
@@ -147,16 +145,6 @@
     if (!confirm('Remove this list from Collecta? Its schedule is removed too; published lists are kept.')) return;
     await fetch('/api/jobs/' + id, { method:'DELETE' });
     loadRecent(); refreshSidebar();
-  }
-
-  async function runKometa(btn) {
-    btn.disabled = true;
-    try {
-      const r = await fetch('/api/jobs/' + btn.dataset.id + '/kometa-run', { method:'POST' });
-      const d = await r.json();
-      toast(d.detail || d.error || (r.ok ? 'Kometa run triggered.' : 'Failed.'), r.ok ? '' : 'error');
-    } catch (e) { toast('Request failed.', 'error'); }
-    btn.disabled = false;
   }
 
   loadTypes();
