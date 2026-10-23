@@ -153,7 +153,7 @@
 
     .card { background:var(--card); color:var(--card-foreground); border:1px solid var(--border); border-radius:14px;
       box-shadow:var(--shadow-xs); }
-    .card + .card { margin-top:20px; }
+    .card:not([hidden]) + .card { margin-top:20px; }
     .card-header { padding:20px 22px 0; display:flex; align-items:flex-start; gap:12px; }
     .card-header .grow { flex:1; min-width:0; }
     .card-title { font-size:15px; font-weight:600; margin:0; letter-spacing:-.01em; }

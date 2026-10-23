@@ -15,9 +15,10 @@
   .source-line { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--muted-foreground); min-width:0; }
   .source-line a { text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .source-line a:hover { color:var(--foreground); text-decoration:underline; }
-  .layout { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:20px; align-items:start; }
-  .layout .side { position:sticky; top:76px; display:flex; flex-direction:column; gap:20px; }
-  .layout .side .card + .card { margin-top:0; }
+  .layout { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:20px; align-items:start; }
+  .layout .side { position:sticky; top:76px; }
+  .layout .col, .layout .side { display:flex; flex-direction:column; gap:20px; min-width:0; }
+  .layout .card + .card { margin-top:0; }
   @media (max-width: 1200px) { .layout { grid-template-columns:1fr; } .layout .side { position:static; } }
 
   .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
@@ -46,18 +47,33 @@
   .btn-reject.on { background:color-mix(in srgb, var(--destructive) 14%, transparent); border-color:transparent; color:var(--destructive); }
   .btn-reject:hover { color:var(--destructive); }
 
-  .pub-buttons { display:flex; flex-direction:column; gap:8px; }
-  .pub-buttons .btn { justify-content:flex-start; width:100%; }
-  .pub-row { display:flex; gap:8px; }
-  .pub-row .btn { flex:1; }
-  .pub-row .btn.icon-only { flex:0 0 36px; }
+  .targets { display:flex; flex-direction:column; }
+  .target { display:flex; align-items:center; gap:12px; padding:12px 0; border-top:1px solid var(--border); }
+  .target:first-child { border-top:0; padding-top:0; }
+  .target:last-child { padding-bottom:0; }
+  .tgt-icon { width:32px; height:32px; border-radius:8px; background:var(--muted); color:var(--muted-foreground);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0; position:relative; }
+  .tgt-icon .dot { position:absolute; right:-2px; bottom:-2px; width:10px; height:10px; border:2px solid var(--card); box-sizing:content-box; }
+  .tgt-main { flex:1; min-width:0; }
+  .tgt-name { font-size:13.5px; font-weight:500; white-space:nowrap; }
+  .tgt-name .mono { font-size:12px; font-weight:400; }
+  .tgt-sub { font-size:12px; color:var(--muted-foreground); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tgt-sub a { color:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:3px; }
+  .tgt-sub a:hover { color:var(--foreground); text-decoration:underline; text-underline-offset:2px; }
+  .tgt-sub.error { color:var(--destructive); }
+  .tgt-actions { display:flex; gap:4px; flex-shrink:0; }
+  .tool-row { display:flex; gap:8px; }
+  .tool-row .btn { flex:1; }
   .badge.link { cursor:pointer; }
   .summary { font-size:12.5px; color:var(--muted-foreground); margin-top:12px; line-height:1.6; }
   .pp-connect { font-size:12.5px; color:var(--muted-foreground); margin-top:8px; }
   .log { display:flex; flex-direction:column; }
-  .log-item { display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-top:1px solid var(--border); font-size:12.5px; }
+  .log-item { padding:10px 0; border-top:1px solid var(--border); font-size:12.5px; }
   .log-item:first-child { border-top:0; padding-top:0; }
-  .log-text { color:var(--muted-foreground); word-break:break-word; }
+  .log-head { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+  .log-head .when { margin-left:auto; color:var(--muted-foreground); font-size:12px; }
+  .log-text { color:var(--muted-foreground); overflow-wrap:anywhere; line-height:1.5; }
+  .log-more { margin-top:10px; }
   .count-badge { margin-left:6px; }
 
   dialog .results { display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:10px; max-height:60vh; overflow:auto; }
@@ -76,8 +92,8 @@
 
   <div id="review" hidden>
     <div class="layout">
-      <div>
-        <div class="card" id="searchingSection" hidden style="margin-bottom:20px">
+      <div class="col">
+        <div class="card" id="searchingSection" hidden>
           <div class="card-header" style="align-items:center">
             <div class="grow"><h2 class="card-title">In search <span class="badge warning count-badge" id="searchingCount"></span></h2>
               <p class="card-desc">Monitored in Radarr but not downloaded yet.</p></div>
@@ -106,13 +122,25 @@
             <span id="tmdbStatus"></span>
           </div>
           <div class="card-body">
-            <div class="pub-buttons">
-              <div class="pub-row">
-                <button class="btn" id="pubTmdb">Create TMDB list</button>
-                <a class="btn outline icon-only" id="tmdbLink" target="_blank" rel="noopener" title="Open on TMDB" hidden>{{ icon('external', 15) }}</a>
+            <div class="targets">
+              <div class="target">
+                <div class="tgt-icon">{{ icon('lists', 16) }}<span class="dot" id="dotTmdb"></span></div>
+                <div class="tgt-main"><div class="tgt-name">TMDB list <span class="muted mono" id="tmdbId"></span></div><div class="tgt-sub" id="subTmdb"></div></div>
+                <div class="tgt-actions">
+                  <a class="btn ghost sm icon-only" id="tmdbLink" target="_blank" rel="noopener" title="Open on TMDB" hidden>{{ icon('external', 15) }}</a>
+                  <button class="btn sm" id="pubTmdb">Create</button>
+                </div>
               </div>
-              <button class="btn outline" id="pubRadarr">Add list to Radarr</button>
-              <button class="btn outline" id="pubKometa">{{ icon('zap', 15) }}Create Kometa collection</button>
+              <div class="target">
+                <div class="tgt-icon">{{ icon('download', 16) }}<span class="dot" id="dotRadarr"></span></div>
+                <div class="tgt-main"><div class="tgt-name">Radarr import list</div><div class="tgt-sub" id="subRadarr"></div></div>
+                <div class="tgt-actions"><button class="btn outline sm" id="pubRadarr">Add</button></div>
+              </div>
+              <div class="target">
+                <div class="tgt-icon">{{ icon('zap', 16) }}<span class="dot" id="dotKometa"></span></div>
+                <div class="tgt-main"><div class="tgt-name">Kometa collection</div><div class="tgt-sub" id="subKometa"></div></div>
+                <div class="tgt-actions"><button class="btn outline sm" id="pubKometa">Create</button></div>
+              </div>
             </div>
             <div class="pp-connect" id="tmdbConnect"></div>
           </div>
@@ -121,7 +149,7 @@
         <div class="card">
           <div class="card-header"><div class="grow"><h2 class="card-title">Radarr</h2><p class="card-desc">Library status of approved titles.</p></div></div>
           <div class="card-body">
-            <div class="pub-row">
+            <div class="tool-row">
               <button class="btn outline sm" id="checkRadarr">{{ icon('refresh', 14) }}Check status</button>
               <button class="btn outline sm" id="importRadarr">{{ icon('download', 14) }}Import downloads</button>
             </div>
@@ -131,7 +159,8 @@
 
         <div class="card" id="activitySection" hidden>
           <div class="card-header"><div class="grow"><h2 class="card-title">Activity</h2></div></div>
-          <div class="card-body"><div class="log" id="log"></div></div>
+          <div class="card-body"><div class="log" id="log"></div>
+            <button class="btn ghost xs log-more" id="logMore" hidden></button></div>
         </div>
       </div>
     </div>
@@ -275,18 +304,37 @@
       JOB.matches.forEach(m => g.appendChild(card(m)));
     }
 
+    const TARGET_NAME = { tmdb:'TMDB', radarr:'Radarr', kometa:'Kometa' };
+    let logExpanded = false;
+
+    function ago(iso) {
+      if (!iso) return '';
+      const sec = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+      if (sec < 60) return 'just now';
+      if (sec < 3600) return Math.round(sec / 60) + ' min ago';
+      if (sec < 86400) return Math.round(sec / 3600) + ' h ago';
+      return Math.round(sec / 86400) + ' d ago';
+    }
+
     function renderLog() {
       const log = $('log'); log.innerHTML = '';
-      const items = JOB.publishes || [];
+      const items = (JOB.publishes || []).slice().reverse();
       if (!items.length) { $('activitySection').hidden = true; return; }
       $('activitySection').hidden = false;
-      items.slice().reverse().forEach(p => {
+      const LIMIT = 4;
+      (logExpanded ? items : items.slice(0, LIMIT)).forEach(p => {
         const d = document.createElement('div');
         d.className = 'log-item ' + p.status;
-        d.innerHTML = '<span class="badge ' + (p.status === 'ok' ? 'success' : 'destructive') + '">' + esc(p.target) + '</span>' +
-          '<span class="log-text">' + esc(p.detail) + '</span>';
+        d.innerHTML = '<div class="log-head"><span class="badge ' + (p.status === 'ok' ? 'success' : 'destructive') + '">' +
+            esc(TARGET_NAME[p.target] || p.target) + (p.status === 'ok' ? '' : ' · failed') + '</span>' +
+            '<span class="when" title="' + esc(p.at ? new Date(p.at).toLocaleString() : '') + '">' + esc(ago(p.at)) + '</span></div>' +
+          '<div class="log-text">' + esc(p.detail) + '</div>';
         log.appendChild(d);
       });
+      const more = $('logMore');
+      more.hidden = items.length <= LIMIT;
+      more.textContent = logExpanded ? 'Show less' : 'Show all ' + items.length;
+      more.onclick = () => { logExpanded = !logExpanded; renderLog(); };
     }
 
     async function update(updates, added) {
@@ -378,18 +426,44 @@
 
     function updatePublishButtons() {
       const pubs = (JOB && JOB.publishes) || [];
-      const tmdbDone = !!(JOB && JOB.tmdb_list_id);
-      const radarrDone = pubs.some(p => p.target === 'radarr' && p.status === 'ok');
-      const t = $('pubTmdb'), r = $('pubRadarr');
-      if (t) {
-        // Re-sync stays available so newly approved titles can be pushed to the existing list.
-        t.innerHTML = tmdbDone ? ICON('refresh', 15) + 'Re-sync TMDB list' : ICON('plus', 15) + 'Create TMDB list';
-        const link = $('tmdbLink');
-        link.hidden = !tmdbDone;
-        if (tmdbDone) link.href = 'https://www.themoviedb.org/list/' + JOB.tmdb_list_id;
+      const lastOk = t => pubs.filter(p => p.target === t && p.status === 'ok').pop();
+      const last = t => pubs.filter(p => p.target === t).pop();
+
+      function row(t, { done, doneText, todoText, createLabel, updateLabel, blocked }) {
+        const ok = lastOk(t), l = last(t);
+        const failed = l && l.status !== 'ok';
+        const key = t[0].toUpperCase() + t.slice(1);
+        const sub = $('sub' + key), dot = $('dot' + key), btn = $('pub' + key);
+        dot.className = 'dot ' + (failed ? 'error' : done ? 'ok' : '');
+        sub.className = 'tgt-sub' + (failed ? ' error' : '');
+        if (failed) { sub.textContent = 'Last attempt failed ' + ago(l.at); sub.title = l.detail; }
+        else if (done) { sub.innerHTML = doneText(ok); sub.title = ok ? ok.detail : ''; }
+        else { sub.textContent = blocked || todoText; sub.title = ''; }
+        btn.innerHTML = done ? ICON('refresh', 14) + updateLabel : ICON('plus', 14) + createLabel;
+        btn.disabled = !!blocked && !done;
+        btn.title = blocked || '';
       }
-      // Radarr stays clickable so it can re-sync the list (add new + search) on demand.
-      if (r) { r.disabled = false; r.innerHTML = ICON(radarrDone ? 'refresh' : 'download', 15) + (radarrDone ? 'Re-sync Radarr' : 'Add list to Radarr'); }
+
+      const tmdbDone = !!(JOB && JOB.tmdb_list_id);
+      row('tmdb', {
+        done: tmdbDone, createLabel: 'Create', updateLabel: 'Re-sync', todoText: 'Not created yet',
+        doneText: ok => 'Synced ' + ago(ok && ok.at),
+      });
+      $('tmdbId').textContent = tmdbDone ? '#' + JOB.tmdb_list_id : '';
+      $('tmdbLink').hidden = !tmdbDone;
+      if (tmdbDone) $('tmdbLink').href = 'https://www.themoviedb.org/list/' + JOB.tmdb_list_id;
+      // Primary style only until the list exists; afterwards all three are equal "update" actions.
+      $('pubTmdb').classList.toggle('outline', tmdbDone);
+
+      row('radarr', {
+        done: !!lastOk('radarr'), createLabel: 'Add', updateLabel: 'Re-sync', todoText: 'Not added yet',
+        blocked: tmdbDone ? '' : 'Create the TMDB list first',
+        doneText: ok => 'Added ' + ago(ok.at),
+      });
+      row('kometa', {
+        done: !!lastOk('kometa'), createLabel: 'Create', updateLabel: 'Update', todoText: 'Not created yet',
+        doneText: ok => (pubs.filter(p => p.target === 'kometa' && p.status === 'ok').length > 1 ? 'Updated ' : 'Created ') + ago(ok.at),
+      });
     }
 
     $('pubRadarr').onclick = (e) => publish('radarr', e.currentTarget);

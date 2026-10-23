@@ -444,7 +444,7 @@ def _job_dict(session, job: Job) -> dict:
             for m in sorted(job.matches, key=lambda x: (x.tmdb_id is not None, x.id))
         ],
         "publishes": [
-            {"target": p.target, "status": p.status, "detail": p.detail}
+            {"target": p.target, "status": p.status, "detail": p.detail, "at": _iso(p.created_at)}
             for p in sorted(job.publishes, key=lambda x: x.id)
         ],
         "schedule": next((
