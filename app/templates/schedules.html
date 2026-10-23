@@ -13,6 +13,8 @@
   .msg-line.error { color:var(--destructive); }
   .checks { display:grid; grid-template-columns:1fr 1fr; gap:14px 20px; }
   .existing { font-size:13px; padding:10px 14px; border-radius:10px; background:var(--muted); margin-bottom:18px; }
+  .source-seg { display:flex; margin-bottom:18px; }
+  .source-seg button { flex:1; justify-content:center; }
   .existing a { font-weight:500; }
   #tmdbHint { margin-top:14px; }
   @media (max-width: 640px) { .checks { grid-template-columns:1fr; } }
@@ -45,6 +47,15 @@
     <button class="btn ghost sm icon-only" id="closeDlg" title="Close">{{ icon('x') }}</button>
   </div>
   <div class="dlg-body">
+    <div class="seg source-seg" id="sourceSeg">
+      <button type="button" data-mode="new" class="on">{{ icon('link', 14) }}New link</button>
+      <button type="button" data-mode="existing">{{ icon('lists', 14) }}Existing list <span class="count" id="pickCount"></span></button>
+    </div>
+    <div class="field" id="pickField" hidden>
+      <label class="label" for="jobPick">List to rescan</label>
+      <select id="jobPick"></select>
+      <div class="hint" id="pickHint">Only link-based lists can be rescanned; pasted text has no source to re-fetch.</div>
+    </div>
     <div class="existing" id="existingNote" hidden></div>
     <div class="field">
       <label class="label" for="url">Link</label>
@@ -148,9 +159,69 @@
     $('typeChooser').classList.toggle('locked', !!job);
   }
 
+  // ---- source: new link vs. existing list ----
+  let sourceMode = 'new', JOBS_CACHE = [];
+
+  async function loadPickable() {
+    try { JOBS_CACHE = (await (await fetch('/api/jobs')).json()).jobs || []; } catch (e) { JOBS_CACHE = []; }
+    const pickable = JOBS_CACHE.filter(j => j.schedulable);
+    const free = pickable.filter(j => !j.schedule);
+    $('pickCount').textContent = free.length;
+    const opt = (j, disabled) => '<option value="' + esc(j.id) + '"' + (disabled ? ' disabled' : '') + '>' +
+      esc((j.list_name || j.source_url) + ' — ' + j.count + ' titles' + (disabled ? ' (already scheduled)' : '')) + '</option>';
+    $('jobPick').innerHTML = '<option value="">' + (free.length ? 'Select a list…' : 'All lists are already scheduled') + '</option>' +
+      free.map(j => opt(j, false)).join('') +
+      (pickable.length > free.length ? '<optgroup label="Already scheduled">' + pickable.filter(j => j.schedule).map(j => opt(j, true)).join('') + '</optgroup>' : '');
+    if (existingJob) $('jobPick').value = existingJob.id;
+  }
+
+  function setSourceMode(mode) {
+    sourceMode = mode;
+    $('sourceSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+    $('pickField').hidden = mode !== 'existing';
+    if (mode === 'new') {
+      if (existingJob) { $('url').value = ''; $('name').value = ''; clearTargets(); userPickedType = false; loadTypes(); }
+      setExisting(null);
+      $('url').focus();
+    } else if (!existingJob) {
+      $('jobPick').value = '';
+      $('url').value = ''; $('url').disabled = true; $('typeChooser').classList.add('locked');
+      $('jobPick').focus();
+    }
+  }
+  $('sourceSeg').querySelectorAll('button').forEach(b => b.onclick = () => setSourceMode(b.dataset.mode));
+
+  function clearTargets() { ['publish_tmdb', 'publish_radarr', 'publish_kometa'].forEach(f => $(f).checked = false); updateHint(); }
+
+  function applyExistingJob(job) {
+    $('url').value = job.source_url; $('name').value = job.list_name || '';
+    selectedType = job.content_type || 'auto'; userPickedType = true;
+    // Pre-tick the targets this list was already published to.
+    const done = new Set((job.publishes || []).filter(p => p.status === 'ok').map(p => p.target));
+    $('publish_tmdb').checked = done.has('tmdb'); $('publish_radarr').checked = done.has('radarr');
+    $('publish_kometa').checked = done.has('kometa');
+    setExisting(job); updateHint(); loadTypes(job.source_url);
+    if (sourceMode !== 'existing') setSourceMode('existing');
+    $('jobPick').value = job.id;
+  }
+
+  $('jobPick').onchange = async () => {
+    const id = $('jobPick').value;
+    $('msg').textContent = '';
+    if (!id) { setExisting(null); $('url').value = ''; $('name').value = ''; clearTargets(); $('url').disabled = true; $('typeChooser').classList.add('locked'); return; }
+    try {
+      const job = await (await fetch('/api/jobs/' + encodeURIComponent(id))).json();
+      if (job.id) applyExistingJob(job);
+    } catch (e) { toast('Could not load the list.', 'error'); }
+  };
+
   function resetForm() {
     editingId = null; userPickedType = false;
     setExisting(null);
+    sourceMode = 'new';
+    $('sourceSeg').hidden = false;
+    $('sourceSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.mode === 'new'));
+    $('pickField').hidden = true;
     if (location.search) history.replaceState(null, '', '/schedules' + location.hash);
     $('formTitle').textContent = 'New scheduled parsing';
     $('save').textContent = 'Create schedule';
@@ -163,7 +234,7 @@
     updateHint(); loadTypes();
   }
 
-  function openNew() { resetForm(); dlg.showModal(); $('url').focus(); }
+  function openNew() { resetForm(); loadPickable(); dlg.showModal(); $('url').focus(); }
   // Don't let the dialog autofocus its close button.
   dlg.addEventListener('focusin', (e) => { if (e.target.id === 'closeDlg' && !dlg.dataset.focused) { dlg.dataset.focused = 1; ($('url').disabled ? $('name') : $('url')).focus(); } });
   dlg.addEventListener('close', () => { delete dlg.dataset.focused; });
@@ -174,6 +245,7 @@
     const s = SCHEDULES.find(x => x.id === id); if (!s) return;
     resetForm();
     editingId = id; userPickedType = true; selectedType = s.content_type;
+    $('sourceSeg').hidden = true;
     $('formTitle').textContent = 'Edit scheduled parsing';
     $('save').textContent = 'Save changes';
     $('runNowWrap').hidden = true;
@@ -187,6 +259,7 @@
   }
 
   $('save').onclick = async () => {
+    if (!editingId && sourceMode === 'existing' && !existingJob) { $('msg').textContent = 'Pick a list first.'; return; }
     const url = $('url').value.trim();
     if (!url) { $('msg').textContent = 'Enter a link first.'; return; }
     const hours = intervalHours();
@@ -298,15 +371,10 @@
   const qs = new URLSearchParams(location.search);
   resetForm();
   if (qs.get('job_id')) {
-    fetch('/api/jobs/' + encodeURIComponent(qs.get('job_id'))).then(r => r.json()).then(job => {
+    fetch('/api/jobs/' + encodeURIComponent(qs.get('job_id'))).then(r => r.json()).then(async job => {
       if (!job.id) { toast('List not found.', 'error'); return; }
-      $('url').value = job.source_url; $('name').value = job.list_name || '';
-      selectedType = job.content_type || 'auto'; userPickedType = true;
-      // Pre-tick the targets this list was already published to.
-      const done = new Set((job.publishes || []).filter(p => p.status === 'ok').map(p => p.target));
-      $('publish_tmdb').checked = done.has('tmdb'); $('publish_radarr').checked = done.has('radarr');
-      $('publish_kometa').checked = done.has('kometa');
-      setExisting(job); updateHint(); loadTypes(job.source_url);
+      await loadPickable();
+      applyExistingJob(job);
       dlg.showModal();
     });
   } else if (qs.get('url')) {
