@@ -131,20 +131,10 @@
         return '<tr>' +
           '<td><a class="cell-main" href="/job/' + j.id + '">' + esc(name) + '</a><span class="cell-sub">' + esc(sub) + '</span></td>' +
           '<td class="shrink"><span class="badge ' + kind + '">' + esc(label) + '</span></td>' +
-          '<td class="num shrink hide-sm">' + j.count + ' movies</td>' +
-          '<td class="shrink"><div class="row-actions">' +
-            '<button class="btn danger-ghost sm icon-only del" data-id="' + j.id + '" title="Remove list">' + ICON('trash', 15) + '</button>' +
-          '</div></td></tr>';
+          '<td class="num shrink hide-sm">' + j.count + ' movies</td></tr>';
       }).join('');
-      document.querySelectorAll('#recentList .del').forEach(b => b.onclick = () => removeJob(b.dataset.id));
       $('recent').hidden = false;
     } catch (e) { /* ignore */ }
-  }
-
-  async function removeJob(id) {
-    if (!confirm('Remove this list from Collecta? Its schedule is removed too; published lists are kept.')) return;
-    await fetch('/api/jobs/' + id, { method:'DELETE' });
-    loadRecent(); refreshSidebar();
   }
 
   loadTypes();
