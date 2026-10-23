@@ -739,6 +739,7 @@ def _schedule_dict(session, s: Schedule) -> dict:
         "job_id": s.job_id if job else "",
         "list_name": job.list_name if job else "",
         "tmdb_list_id": (job.tmdb_list_id or "") if job else "",
+        "published": sorted({p.target for p in job.publishes if p.status == "ok"}) if job else [],
         "count": len(matches),
         "approved": sum(1 for m in matches if m.state == APPROVED),
         "review": sum(1 for m in matches if m.state == REVIEW),
