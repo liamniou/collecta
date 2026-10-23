@@ -286,8 +286,8 @@ def _run_schedule(schedule_id: int) -> None:
         _finish_schedule(schedule_id, "error", f"Parsing failed: {exc}", 0, 0)
         return
 
-    notes = [f"{extracted} title(s) on the page, {added} new"
-             + (f", {added_approved} auto-approved" if added else "")]
+    notes = [f"{extracted} titles on the page, {added} new"
+             + (f" ({added_approved} auto-approved)" if added else "")]
     status = "ok"
     if not extracted:
         # An empty result for a scheduled list means the page/parser broke, not "nothing new".
@@ -296,15 +296,21 @@ def _run_schedule(schedule_id: int) -> None:
     with get_session() as session:
         job = session.get(Job, job_id)
         published = {p.target for p in job.publishes if p.status == "ok"}
+    # Every enabled target is reported on every run so run summaries are comparable;
+    # full publisher output goes to the list's Activity log.
     for target in targets:
+        label = _TARGET_LABELS[target]
         # Radarr only needs registering once (it re-reads the TMDB list itself);
         # TMDB/Kometa are re-synced whenever new approved titles arrived.
         if target in published and (target == "radarr" or not added_approved):
+            notes.append(f"{label} up to date")
             continue
         result, detail = _PUBLISHERS[target](job_id)
-        notes.append(f"{target}: {detail}")
-        if result == "error":
-            status = "error"
+        if result == "ok":
+            notes.append(f"{label} {_TARGET_DONE[target]}")
+        else:
+            status = "error" if result == "error" else status
+            notes.append(f"{label} {'failed' if result == 'error' else 'skipped'}: {detail[:160]}")
     _finish_schedule(schedule_id, status, " · ".join(notes), added, extracted)
 
 
@@ -393,6 +399,9 @@ def _do_publish_kometa(job_id: str) -> tuple[str, str]:
     with _job_lock(job_id):
         return _do_publish_kometa_unlocked(job_id)
 
+
+_TARGET_LABELS = {"tmdb": "TMDB", "radarr": "Radarr", "kometa": "Kometa"}
+_TARGET_DONE = {"tmdb": "synced", "radarr": "list registered", "kometa": "collection updated"}
 
 _PUBLISHERS = {"tmdb": _do_publish_tmdb, "radarr": _do_publish_radarr, "kometa": _do_publish_kometa}
 

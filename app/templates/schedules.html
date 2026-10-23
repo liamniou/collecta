@@ -8,10 +8,9 @@
 <style>
   tr.highlight td { background:color-mix(in srgb, var(--info) 8%, transparent); }
   tr.paused td:not(:last-child) { opacity:.55; }
-  #list .cell-main, #list .cell-sub { max-width:min(340px, 26vw); }
-  .targets { display:flex; flex-wrap:wrap; gap:4px; max-width:150px; }
+  #list .cell-main, #list .cell-sub { max-width:min(420px, 32vw); }
   @media (max-width: 1400px) { .hide-md { display:none; } }
-  .msg-line { font-size:12.5px; color:var(--muted-foreground); margin-top:3px; max-width:min(340px, 26vw); white-space:normal;
+  .msg-line { font-size:12.5px; color:var(--muted-foreground); margin-top:3px; max-width:min(420px, 32vw); white-space:normal;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   .msg-line.error { color:var(--destructive); }
   .checks { display:grid; grid-template-columns:1fr 1fr; gap:14px 20px; }
@@ -35,9 +34,9 @@
         <table class="table">
           <thead><tr>
             <th>List</th><th>Status</th><th class="hide-sm">Frequency</th><th class="hide-sm hide-md">Last run</th><th>Next run</th>
-            <th class="num">Titles</th><th class="hide-sm" title="Green = published · ↻ = re-synced on each run">Targets</th><th></th>
+            <th class="num">Titles</th><th></th>
           </tr></thead>
-          <tbody id="list"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+          <tbody id="list"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -305,7 +304,7 @@
 
   function render() {
     if (!SCHEDULES.length) {
-      $('list').innerHTML = '<tr><td colspan="8" class="empty">No scheduled parsings yet. Click <b>New schedule</b>, or use <b>Schedule</b> on any list.</td></tr>';
+      $('list').innerHTML = '<tr><td colspan="7" class="empty">No scheduled parsings yet. Click <b>New schedule</b>, or use <b>Schedule</b> on any list.</td></tr>';
       return;
     }
     $('list').innerHTML = SCHEDULES.map(s => {
@@ -315,18 +314,6 @@
       const [label, kind] = STATUS[s.last_status] || ['Never run', 'outline'];
       const dotState = s.enabled ? (s.last_status || 'never') : 'paused';
       const hl = location.hash === '#s-' + s.id ? ' highlight' : '';
-      // Where the list actually lives (its publish history, not the last run's log) + what each run re-syncs.
-      const published = new Set(s.published || []);
-      const pub = [['tmdb', 'TMDB'], ['radarr', 'Radarr'], ['kometa', 'Kometa']].map(([t, label]) => {
-        const done = published.has(t), auto = s['publish_' + t];
-        if (!done && !auto) return '';
-        const title = (done ? 'Published' : 'Not published yet') + (auto ? ' · re-synced on each run' : '');
-        const inner = label + (auto ? ' ' + ICON('refresh', 11) : '');
-        if (t === 'tmdb' && s.tmdb_list_id)
-          return '<a class="badge ' + (done ? 'success' : 'outline') + '" href="https://www.themoviedb.org/list/' + esc(s.tmdb_list_id) +
-            '" target="_blank" rel="noopener" title="' + title + ' · open TMDB list ' + esc(s.tmdb_list_id) + '">' + inner + '</a>';
-        return '<span class="badge ' + (done ? 'success' : 'outline') + '" title="' + title + '">' + inner + '</span>';
-      }).filter(Boolean).join(' ');
       return '<tr id="s-' + s.id + '" class="' + (s.enabled ? '' : 'paused') + hl + '">' +
         '<td>' + nameHtml +
           '<a class="cell-sub" href="' + esc(s.source_url) + '" target="_blank" rel="noopener">' + esc(s.source_url) + '</a>' +
@@ -339,7 +326,6 @@
         '<td class="shrink">' + (s.enabled ? rel(s.next_run_at) : '<span class="muted">—</span>') + '</td>' +
         '<td class="num shrink">' + s.approved + '<span class="muted">/' + s.count + '</span>' +
           (s.review ? ' <span class="badge warning">' + s.review + ' to review</span>' : '') + '</td>' +
-        '<td class="hide-sm"><div class="targets">' + (pub || '<span class="muted">—</span>') + '</div></td>' +
         '<td class="shrink"><div class="row-actions">' +
           '<button class="btn ghost sm icon-only" data-act="run" data-id="' + s.id + '" title="Run now"' + (active ? ' disabled' : '') + '>' + ICON(active ? 'refresh' : 'play', 15) + '</button>' +
           '<button class="btn ghost sm icon-only" data-act="toggle" data-id="' + s.id + '" title="' + (s.enabled ? 'Pause' : 'Resume') + '">' + ICON(s.enabled ? 'pause' : 'play', 15) + '</button>' +
