@@ -12,7 +12,12 @@ def _slug(name: str) -> str:
     return s or "list"
 
 
-def create_collection(list_name: str, movies: list[dict], source_url: str = "", tmdb_list_id: str = "") -> str:
+def create_collection(list_name: str, movies: list[dict], source_url: str = "",
+                      tmdb_list_id: str = "", collection_order: str = config.DEFAULT_KOMETA_ORDER) -> str:
+    if collection_order not in config.KOMETA_ORDER_OPTIONS:
+        raise ValueError("Unsupported Kometa collection order.")
+    if collection_order == "custom" and not tmdb_list_id:
+        raise ValueError("Create a TMDB list first to use TMDB list order.")
     tmdb_ids = [m["tmdb_id"] for m in movies if m.get("tmdb_id")]
     if not tmdb_ids and not tmdb_list_id:
         raise RuntimeError("No movies with a TMDB id to add.")
@@ -23,8 +28,8 @@ def create_collection(list_name: str, movies: list[dict], source_url: str = "", 
     rel_path = f"config/{filename}"
 
     if tmdb_list_id:
-        # Single builder: reads the shared TMDB list (also used by Radarr), order preserved.
-        builder = f"    tmdb_list: {tmdb_list_id}\n    collection_order: custom\n"
+        # Read the shared TMDB list, also used by Radarr.
+        builder = f"    tmdb_list: {tmdb_list_id}\n"
         count = len(tmdb_ids) or "list"
     else:
         ids_csv = ", ".join(str(i) for i in tmdb_ids)
@@ -39,6 +44,7 @@ def create_collection(list_name: str, movies: list[dict], source_url: str = "", 
         # Double-quote the key: unquoted names with a colon (e.g. "Title: Subtitle") break the YAML mapping.
         f"  {json.dumps(list_name)}:\n"
         f"{builder}"
+        f"    collection_order: {collection_order}\n"
         "    sync_mode: sync\n"
         # Pin to Plex Home, other users' Home, and the library Recommended tab.
         "    visible_home: true\n"
@@ -51,7 +57,8 @@ def create_collection(list_name: str, movies: list[dict], source_url: str = "", 
     registered = _register_in_config(rel_path)
     note = "registered in config.yml" if registered else "already registered in config.yml"
     src = f"TMDB list {tmdb_list_id}" if tmdb_list_id else f"{count} movies"
-    return f"Wrote Kometa collection '{list_name}' ({src}) to {rel_path}; {note}."
+    return (f"Wrote Kometa collection '{list_name}' ({src}) to {rel_path}; {note}. "
+            f"Order: {config.KOMETA_ORDER_OPTIONS[collection_order]}.")
 
 
 def trigger_run(list_name: str) -> str:

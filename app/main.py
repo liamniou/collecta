@@ -372,10 +372,12 @@ def _do_publish_kometa_unlocked(job_id: str) -> tuple[str, str]:
         list_name = job.list_name if job else "Collecta list"
         source_url = job.source_url if job else ""
         tmdb_list_id = (job.tmdb_list_id if job else "") or ""
+        collection_order = job.kometa_order if job else config.DEFAULT_KOMETA_ORDER
     if not movies:
         return "skip", "No approved movies."
     try:
-        detail = kometa.create_collection(list_name, movies, source_url, tmdb_list_id)
+        detail = kometa.create_collection(
+            list_name, movies, source_url, tmdb_list_id, collection_order=collection_order)
         detail += " " + kometa.trigger_run(list_name)
         status = "ok"
     except Exception as exc:  # noqa: BLE001
@@ -424,6 +426,7 @@ def _job_dict(session, job: Job) -> dict:
         "error": job.error,
         "content_type": job.content_type or "auto",
         "tmdb_list_id": job.tmdb_list_id or "",
+        "kometa_order": job.kometa_order,
         "radarr_status": models.json.loads(job.radarr_status) if job.radarr_status else {},
         "radarr_checked_at": job.radarr_checked_at.isoformat() if job.radarr_checked_at else "",
         "matches": [
@@ -469,7 +472,8 @@ def index():
 
 @app.route("/job/<job_id>")
 def job_page(job_id: str):
-    return render_template("job.html", job_id=job_id, radarr_web_url=config.RADARR_WEB_URL)
+    return render_template("job.html", job_id=job_id, radarr_web_url=config.RADARR_WEB_URL,
+                           kometa_order_options=config.KOMETA_ORDER_OPTIONS)
 
 
 @app.route("/api/content-types")
@@ -604,6 +608,23 @@ def update_name(job_id: str):
         if name:
             job.list_name = name
         return jsonify({"list_name": job.list_name})
+
+
+@app.route("/api/jobs/<job_id>/kometa-order", methods=["POST"])
+def update_kometa_order(job_id: str):
+    data = request.get_json(force=True)
+    order = data.get("kometa_order") if isinstance(data, dict) else None
+    if not isinstance(order, str) or order not in config.KOMETA_ORDER_OPTIONS:
+        return jsonify({"error": "Unsupported Kometa collection order."}), 400
+    with _job_lock(job_id):
+        with get_session() as session:
+            job = session.get(Job, job_id)
+            if not job:
+                return jsonify({"error": "not found"}), 404
+            if order == "custom" and not job.tmdb_list_id:
+                return jsonify({"error": "Create a TMDB list first to use TMDB list order."}), 400
+            job.kometa_order = order
+    return jsonify({"kometa_order": order})
 
 
 @app.route("/api/tmdb/search")

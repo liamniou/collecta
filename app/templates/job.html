@@ -142,6 +142,15 @@
                 <div class="tgt-actions"><button class="btn outline sm" id="pubKometa">Create</button></div>
               </div>
             </div>
+            <div class="field" style="margin-top:16px; margin-bottom:0">
+              <label class="label" for="kometaOrder">Kometa collection order</label>
+              <select id="kometaOrder">
+                {% for value, label in kometa_order_options.items() %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+              <p class="card-desc" style="margin-top:8px">Saved per list. Click Create or Update above to apply; scheduled updates use this order too.</p>
+            </div>
             <div class="pp-connect" id="tmdbConnect"></div>
           </div>
         </div>
@@ -190,6 +199,7 @@
     let JOB = null;
     let swapTarget = null; // match id being swapped, or 'add'
     let RADARR_STATUS = {}; // tmdb_id -> radarr state
+    let KOMETA_ORDER_SAVING = false;
 
     const placeholder = 'data:image/svg+xml;utf8,' + encodeURIComponent(
       '<svg xmlns="http://www.w3.org/2000/svg" width="150" height="225"><rect width="100%" height="100%" fill="#8882"/><text x="50%" y="50%" fill="#888" font-size="12" font-family="sans-serif" text-anchor="middle">no poster</text></svg>');
@@ -197,6 +207,7 @@
     async function poll() {
       const r = await fetch('/api/jobs/' + JOB_ID);
       JOB = await r.json();
+      renderKometaOrder();
       if (document.activeElement !== $('listname')) $('listname').value = JOB.list_name || '';
       $('crumbName').textContent = JOB.list_name || 'Untitled list';
       document.title = (JOB.list_name || 'List') + ' · Collecta';
@@ -229,6 +240,35 @@
       };
       btn.hidden = false;
     }
+
+    function renderKometaOrder() {
+      if (!KOMETA_ORDER_SAVING) $('kometaOrder').value = JOB.kometa_order;
+      $('kometaOrder').querySelector('option[value="custom"]').disabled = !JOB.tmdb_list_id;
+    }
+
+    $('kometaOrder').onchange = async () => {
+      const select = $('kometaOrder');
+      KOMETA_ORDER_SAVING = true;
+      select.disabled = true;
+      updatePublishButtons();
+      try {
+        const r = await fetch('/api/jobs/' + JOB_ID + '/kometa-order', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({kometa_order: select.value})
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not save collection order.');
+        JOB.kometa_order = d.kometa_order;
+        toast('Collection order saved. Create or update the Kometa collection to apply.');
+      } catch (e) {
+        toast(e.message || 'Could not save collection order.', 'error');
+      } finally {
+        KOMETA_ORDER_SAVING = false;
+        select.disabled = false;
+        renderKometaOrder();
+        updatePublishButtons();
+      }
+    };
 
     function renderStatus() {
       const map = { queued:'Queued', ingesting:'Downloading & transcribing',
@@ -407,6 +447,7 @@
     async function publish(target, btn) {
       const orig = btn.innerHTML;
       btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Working…';
+      if (target === 'kometa') $('kometaOrder').disabled = true;
       try {
         const r = await fetch('/api/jobs/' + JOB_ID + '/' + target, { method:'POST' });
         const d = await r.json();
@@ -422,6 +463,8 @@
       const last = (JOB.publishes || []).filter(p => p.target === target).pop();
       if (last) toast(last.detail, last.status === 'ok' ? '' : 'error');
       updatePublishButtons();
+      renderKometaOrder();
+      $('kometaOrder').disabled = KOMETA_ORDER_SAVING;
     }
 
     function updatePublishButtons() {
@@ -440,7 +483,7 @@
         else if (done) { sub.innerHTML = doneText(ok); sub.title = ok ? ok.detail : ''; }
         else { sub.textContent = blocked || todoText; sub.title = ''; }
         btn.innerHTML = done ? ICON('refresh', 14) + updateLabel : ICON('plus', 14) + createLabel;
-        btn.disabled = !!blocked && !done;
+        btn.disabled = (!!blocked && !done) || (t === 'kometa' && KOMETA_ORDER_SAVING);
         btn.title = blocked || '';
       }
 

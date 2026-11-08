@@ -48,6 +48,8 @@ class Job(Base):
     error = Column(Text, default="")
     content_type = Column(String(30), default="auto")
     tmdb_list_id = Column(String(30), default="")
+    kometa_order = Column(String(30), nullable=False, default=config.DEFAULT_KOMETA_ORDER,
+                          server_default=config.DEFAULT_KOMETA_ORDER)
     radarr_status = Column(Text, default="")  # cached JSON map tmdb_id -> state
     radarr_checked_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -158,6 +160,11 @@ def _migrate():
             conn.exec_driver_sql("ALTER TABLE jobs ADD COLUMN radarr_checked_at DATETIME")
         if "content_type" not in cols:
             conn.exec_driver_sql("ALTER TABLE jobs ADD COLUMN content_type TEXT DEFAULT 'auto'")
+        if "kometa_order" not in cols:
+            conn.exec_driver_sql(
+                f"ALTER TABLE jobs ADD COLUMN kometa_order TEXT NOT NULL "
+                f"DEFAULT '{config.DEFAULT_KOMETA_ORDER}'"
+            )
         sched_cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(schedules)")}
         if "last_extracted" not in sched_cols:
             conn.exec_driver_sql("ALTER TABLE schedules ADD COLUMN last_extracted INTEGER DEFAULT 0")

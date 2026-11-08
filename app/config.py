@@ -27,6 +27,14 @@ RADARR_ROOT_FOLDER = _clean(os.getenv("RADARR_ROOT_FOLDER", "/media/Movies"))
 KOMETA_CONFIG_DIR = _clean(os.getenv("KOMETA_CONFIG_DIR", "/kometa-config"))
 KOMETA_LIBRARY = _clean(os.getenv("KOMETA_LIBRARY", "Films"))
 KOMETA_CONTAINER = _clean(os.getenv("KOMETA_CONTAINER", "kometa"))
+DEFAULT_KOMETA_ORDER = "year.desc"
+KOMETA_ORDER_OPTIONS = {
+    "year.desc": "Release year (newest first)",
+    "year.asc": "Release year (oldest first)",
+    "title.asc": "Title (A-Z)",
+    "title.desc": "Title (Z-A)",
+    "custom": "TMDB list order",
+}
 
 DATA_DIR = _clean(os.getenv("DATA_DIR", "/data"))
 DATABASE_URL = _clean(os.getenv("DATABASE_URL")) or f"sqlite:///{os.path.join(DATA_DIR, 'collecta.db')}"

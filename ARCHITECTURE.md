@@ -174,6 +174,14 @@ A scheduled run that extracts zero titles is recorded as an error (broken page/p
 Every job (list) is persisted in SQLite and listed at `/lists` (`GET /api/jobs`). Any link-based
 list can be scheduled from there or from its page (`POST /api/schedules {"job_id": ...}`); the
 schedule then merges into that list, keeping its TMDB list, Radarr import list and Kometa file.
+Each list's **Publish → Kometa collection order** selector saves its order in SQLite.
+New and existing lists default to release year descending (`year.desc`). Alternatives are
+`year.asc`, `title.asc`, `title.desc`, and `custom` (TMDB list order, requiring a TMDB list).
+`POST /api/jobs/<id>/kometa-order {"kometa_order": "year.desc"}` saves the setting;
+`GET /api/jobs/<id>` returns it. Click **Create/Update** for Kometa to rewrite the collection
+and trigger a run; saving alone does not change an existing Plex collection. Scheduled
+Kometa publishes use the same saved setting. Both TMDB-list and direct-movie builders
+write an explicit `collection_order`; this does not change the TMDB or Radarr list order.
 One schedule per list; pasted-text lists can't be scheduled. **Rescan** also merges (approvals,
 rejections and publish links are kept) instead of recreating the list, and a failed rescan
 leaves the existing titles visible. Publishes are serialized per list so concurrent clicks and
